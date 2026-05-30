@@ -1,0 +1,149 @@
+# Render Blueprint — deploy with: render.com → New → Blueprint → point at this repo (root: sms-backend)
+# Provisions: managed Postgres, managed Key-Value (Redis-compatible), web API, background worker.
+databases:
+  - name: fenix-postgres
+    plan: basic-256mb        # bump for production load
+    databaseName: fenix
+    user: fenix
+    postgresMajorVersion: "16"
+
+services:
+  - type: keyvalue           # Render's managed Redis-compatible store
+    name: fenix-redis
+    plan: free               # bump for production
+    ipAllowList: []          # only allow internal Render network
+
+  - type: web
+    name: fenix-api
+    runtime: node
+    plan: starter
+    rootDir: .
+    region: oregon
+    healthCheckPath: /health/ready
+    buildCommand: npm ci && npx prisma generate && npm run build
+    preDeployCommand: npx prisma migrate deploy
+    startCommand: node dist/server.js
+    autoDeploy: true
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: "4000"
+      - key: API_PREFIX
+        value: /api/v1
+      - key: TRUST_PROXY
+        value: "1"
+      - key: DATABASE_URL
+        fromDatabase:
+          name: fenix-postgres
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          type: keyvalue
+          name: fenix-redis
+          property: connectionString
+      - key: JWT_ACCESS_SECRET
+        generateValue: true
+      - key: JWT_REFRESH_SECRET
+        generateValue: true
+      - key: JWT_ACCESS_TTL
+        value: 15m
+      - key: JWT_REFRESH_TTL_DAYS
+        value: "7"
+      - key: BCRYPT_SALT_ROUNDS
+        value: "12"
+      # Replace with your real Vercel domain(s), comma-separated:
+      - key: CORS_ORIGINS
+        sync: false
+      - key: APP_PUBLIC_URL
+        sync: false
+      - key: QUEUE_DRIVER
+        value: bullmq
+      - key: STORAGE_DRIVER
+        value: s3
+      - key: S3_REGION
+        sync: false
+      - key: S3_BUCKET
+        sync: false
+      - key: S3_ENDPOINT
+        sync: false
+      - key: S3_ACCESS_KEY_ID
+        sync: false
+      - key: S3_SECRET_ACCESS_KEY
+        sync: false
+      - key: S3_PUBLIC_BASE_URL
+        sync: false
+      - key: EMAIL_DRIVER
+        value: resend
+      - key: EMAIL_FROM
+        sync: false
+      - key: RESEND_API_KEY
+        sync: false
+      - key: SMS_DRIVER
+        value: console
+      - key: SENTRY_DSN
+        sync: false
+      - key: BOOTSTRAP_SCHOOL_NAME
+        sync: false
+      - key: BOOTSTRAP_ADMIN_EMAIL
+        sync: false
+      - key: BOOTSTRAP_ADMIN_PASSWORD
+        sync: false
+
+  - type: worker
+    name: fenix-worker
+    runtime: node
+    plan: starter
+    rootDir: .
+    region: oregon
+    buildCommand: npm ci && npx prisma generate && npm run build
+    startCommand: node dist/worker.js
+    autoDeploy: true
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        fromDatabase:
+          name: fenix-postgres
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          type: keyvalue
+          name: fenix-redis
+          property: connectionString
+      - key: JWT_ACCESS_SECRET
+        fromService:
+          type: web
+          name: fenix-api
+          envVarKey: JWT_ACCESS_SECRET
+      - key: JWT_REFRESH_SECRET
+        fromService:
+          type: web
+          name: fenix-api
+          envVarKey: JWT_REFRESH_SECRET
+      - key: QUEUE_DRIVER
+        value: bullmq
+      - key: STORAGE_DRIVER
+        value: s3
+      - key: S3_REGION
+        sync: false
+      - key: S3_BUCKET
+        sync: false
+      - key: S3_ENDPOINT
+        sync: false
+      - key: S3_ACCESS_KEY_ID
+        sync: false
+      - key: S3_SECRET_ACCESS_KEY
+        sync: false
+      - key: S3_PUBLIC_BASE_URL
+        sync: false
+      - key: EMAIL_DRIVER
+        value: resend
+      - key: EMAIL_FROM
+        sync: false
+      - key: RESEND_API_KEY
+        sync: false
+      - key: SMS_DRIVER
+        value: console
+      - key: SENTRY_DSN
+        sync: false

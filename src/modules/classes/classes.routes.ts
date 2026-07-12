@@ -8,6 +8,7 @@ import {
   classIdParamSchema,
   createClassSchema,
   enrollStudentSchema,
+  inviteStudentToClassSchema,
   listClassesQuerySchema,
   updateClassSchema,
 } from './classes.schemas';
@@ -16,12 +17,12 @@ const router = Router();
 router.use(authenticate);
 
 router.get('/', validate(listClassesQuerySchema, 'query'), asyncHandler(controller.list));
-router.post('/', authorize('SUPER_ADMIN', 'ADMIN'), validate(createClassSchema), asyncHandler(controller.create));
+router.post('/', authorize('SUPER_ADMIN', 'ADMIN', 'TEACHER'), validate(createClassSchema), asyncHandler(controller.create));
 router.get('/:id', validate(classIdParamSchema, 'params'), asyncHandler(controller.getOne));
 router.get('/:id/roster', validate(classIdParamSchema, 'params'), asyncHandler(controller.roster));
 router.put(
   '/:id',
-  authorize('SUPER_ADMIN', 'ADMIN'),
+  authorize('SUPER_ADMIN', 'ADMIN', 'TEACHER'),
   validate(classIdParamSchema, 'params'),
   validate(updateClassSchema),
   asyncHandler(controller.update),
@@ -38,6 +39,13 @@ router.post(
   validate(classIdParamSchema, 'params'),
   validate(enrollStudentSchema),
   asyncHandler(controller.enroll),
+);
+router.post(
+  '/:id/invite-student',
+  authorize('SUPER_ADMIN', 'ADMIN', 'TEACHER'),
+  validate(classIdParamSchema, 'params'),
+  validate(inviteStudentToClassSchema),
+  asyncHandler(controller.inviteStudent),
 );
 
 export default router;

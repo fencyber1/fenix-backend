@@ -22,7 +22,14 @@ export const enrollStudentSchema = z.object({
   academicYear: z.string().trim().max(20).optional(),
 });
 
+export const inviteStudentToClassSchema = z.object({
+  email: z.string().email().max(255),
+  firstName: z.string().trim().min(1).max(100),
+  lastName: z.string().trim().min(1).max(100),
+});
+
 export type CreateClassInput = z.infer<typeof createClassSchema>;
 export type UpdateClassInput = z.infer<typeof updateClassSchema>;
 export type ListClassesQuery = z.infer<typeof listClassesQuerySchema>;
 export type EnrollStudentInput = z.infer<typeof enrollStudentSchema>;
+export type InviteStudentToClassInput = z.infer<typeof inviteStudentToClassSchema>;

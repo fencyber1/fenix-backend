@@ -7,6 +7,7 @@ import * as service from './classes.service';
 import type {
   CreateClassInput,
   EnrollStudentInput,
+  InviteStudentToClassInput,
   ListClassesQuery,
   UpdateClassInput,
 } from './classes.schemas';
@@ -55,4 +56,10 @@ export async function enroll(req: Request, res: Response): Promise<Response> {
   const auth = requireAuth(req);
   const result = await service.enrollStudent(auth, req.params.id as string, req.body as EnrollStudentInput, auditCtx(req));
   return created(res, result, 'Student enrolled');
+}
+
+export async function inviteStudent(req: Request, res: Response): Promise<Response> {
+  const auth = requireAuth(req);
+  const result = await service.inviteStudentToClass(auth, req.params.id as string, req.body as InviteStudentToClassInput, auditCtx(req));
+  return created(res, result, 'Invitation created');
 }

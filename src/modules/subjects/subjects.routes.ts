@@ -10,8 +10,8 @@ const router = Router();
 router.use(authenticate);
 
 router.get('/', validate(listSubjectsQuerySchema, 'query'), asyncHandler(controller.list));
-router.post('/', authorize('SUPER_ADMIN', 'ADMIN'), validate(createSubjectSchema), asyncHandler(controller.create));
-router.put('/:id', authorize('SUPER_ADMIN', 'ADMIN'), validate(subjectIdParamSchema, 'params'), validate(updateSubjectSchema), asyncHandler(controller.update));
+router.post('/', authorize('SUPER_ADMIN', 'ADMIN', 'TEACHER'), validate(createSubjectSchema), asyncHandler(controller.create));
+router.put('/:id', authorize('SUPER_ADMIN', 'ADMIN', 'TEACHER'), validate(subjectIdParamSchema, 'params'), validate(updateSubjectSchema), asyncHandler(controller.update));
 router.delete('/:id', authorize('SUPER_ADMIN', 'ADMIN'), validate(subjectIdParamSchema, 'params'), asyncHandler(controller.remove));
 
 export default router;

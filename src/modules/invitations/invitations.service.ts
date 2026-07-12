@@ -187,20 +187,42 @@ export async function registerWithToken(
       });
     } else if (record.role === 'STUDENT') {
       displayId = await nextDisplayId('STUDENT', record.tenantId);
-      await tx.student.create({
+      const student = await tx.student.create({
         data: {
           tenantId: record.tenantId,
           userId: user.id,
           displayId,
           studentNumber: displayId,
-          firstName: record.name.split(' ')[0] ?? record.name,
-          lastName: record.name.split(' ').slice(1).join(' ') || '',
+          firstName: (roleData.firstName as string) || (record.name.split(' ')[0] ?? record.name),
+          lastName: (roleData.lastName as string) || record.name.split(' ').slice(1).join(' ') || '',
           phone: (input.phone as string) || null,
           dob: new Date('2000-01-01'),
           gender: 'OTHER',
           admissionDate: new Date(),
         },
       });
+
+      // Auto-enroll in class if classId is in roleData
+      const classId = roleData.classId as string | undefined;
+      if (classId) {
+        const klass = await tx.class.findFirst({
+          where: { id: classId, tenantId: record.tenantId, deletedAt: null },
+          select: { id: true, capacity: true, academicYear: true },
+        });
+        if (klass) {
+          const enrollmentCount = await tx.enrollment.count({ where: { classId } });
+          if (enrollmentCount < klass.capacity) {
+            await tx.enrollment.create({
+              data: {
+                tenantId: record.tenantId,
+                classId,
+                studentId: student.id,
+                academicYear: klass.academicYear,
+              },
+            });
+          }
+        }
+      }
     } else if (record.role === 'PARENT') {
       displayId = await nextDisplayId('PARENT', record.tenantId);
       // Link to student if studentId is in roleData

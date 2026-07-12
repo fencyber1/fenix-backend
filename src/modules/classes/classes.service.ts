@@ -4,10 +4,12 @@ import { BadRequestError, ForbiddenError, NotFoundError } from '@/utils/errors';
 import { buildOrderBy, buildPaginationMeta, resolvePagination } from '@/utils/pagination';
 import type { PaginationMeta } from '@/utils/http';
 import { writeAudit, type AuditContext } from '@/modules/audit/audit.service';
+import { generateRandomToken, sha256 } from '@/utils/password';
 import type { AuthContext } from '@/types/express';
 import type {
   CreateClassInput,
   EnrollStudentInput,
+  InviteStudentToClassInput,
   ListClassesQuery,
   UpdateClassInput,
 } from './classes.schemas';
@@ -35,6 +37,9 @@ export async function createClass(
   const tenantId = requireTenant(auth);
   if (input.classTeacherId) await assertTeacherInTenant(tenantId, input.classTeacherId);
 
+  const count = await prisma.class.count({ where: { tenantId } });
+  const displayId = `CLASS-${String(count + 1).padStart(3, '0')}`;
+
   const klass = await prisma.class.create({
     data: {
       tenantId,
@@ -43,6 +48,7 @@ export async function createClass(
       academicYear: input.academicYear,
       classTeacherId: input.classTeacherId ?? null,
       capacity: input.capacity,
+      displayId,
     },
   });
   await writeAudit({ ...ctx, action: AuditAction.CREATE, tableName: 'classes', recordId: klass.id, after: klass });
@@ -174,4 +180,43 @@ export async function enrollStudent(
   });
   await writeAudit({ ...ctx, action: AuditAction.CREATE, tableName: 'enrollments', recordId: enrollment.id, after: enrollment });
   return enrollment;
+}
+
+export async function inviteStudentToClass(
+  auth: AuthContext,
+  classId: string,
+  input: InviteStudentToClassInput,
+  ctx: AuditContext,
+): Promise<{ token: string }> {
+  const tenantId = requireTenant(auth);
+  const klass = await prisma.class.findFirst({ where: { id: classId, tenantId, deletedAt: null } });
+  if (!klass) throw new NotFoundError('Class');
+
+  if (auth.role === 'TEACHER') {
+    const staff = await prisma.staff.findFirst({
+      where: { userId: auth.userId, tenantId, deletedAt: null },
+      select: { id: true },
+    });
+    if (!staff || klass.classTeacherId !== staff.id) {
+      throw new ForbiddenError('You can only invite students to your own class');
+    }
+  }
+
+  const rawToken = generateRandomToken();
+  const tokenHash = sha256(rawToken);
+
+  const invitation = await prisma.invitationToken.create({
+    data: {
+      tenantId,
+      tokenHash,
+      role: 'STUDENT',
+      email: input.email,
+      name: `${input.firstName} ${input.lastName}`,
+      roleData: JSON.stringify({ firstName: input.firstName, lastName: input.lastName, classId }),
+      status: 'PENDING',
+      expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+    },
+  });
+  await writeAudit({ ...ctx, action: AuditAction.CREATE, tableName: 'invitation_tokens', recordId: invitation.id, after: invitation });
+  return { token: rawToken };
 }

@@ -25,7 +25,7 @@ export async function createSubject(auth: AuthContext, input: CreateSubjectInput
   await assertClassInTenant(tenantId, input.classId);
   if (input.teacherId) await assertTeacherInTenant(tenantId, input.teacherId);
   const subject = await prisma.subject.create({
-    data: { tenantId, classId: input.classId, name: input.name, code: input.code, teacherId: input.teacherId ?? null },
+    data: { tenantId, classId: input.classId, name: input.name, code: input.code, description: input.description ?? null, teacherId: input.teacherId ?? null },
   });
   await writeAudit({ ...ctx, action: AuditAction.CREATE, tableName: 'subjects', recordId: subject.id, after: subject });
   return subject;
@@ -56,6 +56,7 @@ export async function updateSubject(auth: AuthContext, id: string, input: Update
   const data: Prisma.SubjectUpdateInput = {
     ...(input.name !== undefined && { name: input.name }),
     ...(input.code !== undefined && { code: input.code }),
+    ...(input.description !== undefined && { description: input.description }),
     ...(input.teacherId !== undefined && {
       teacher: input.teacherId ? { connect: { id: input.teacherId } } : { disconnect: true },
     }),

@@ -4,12 +4,14 @@ export const createSubjectSchema = z.object({
   classId: z.string().uuid(),
   name: z.string().trim().min(1).max(80),
   code: z.string().trim().min(1).max(20),
+  description: z.string().trim().max(500).optional(),
   teacherId: z.string().uuid().optional(),
 });
 
 export const updateSubjectSchema = z.object({
   name: z.string().trim().min(1).max(80).optional(),
   code: z.string().trim().min(1).max(20).optional(),
+  description: z.string().trim().max(500).nullable().optional(),
   teacherId: z.string().uuid().nullable().optional(),
 });
 

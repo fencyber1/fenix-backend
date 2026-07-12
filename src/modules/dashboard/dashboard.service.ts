@@ -125,11 +125,30 @@ export async function getDashboard(auth: AuthContext): Promise<DashboardData> {
 
 export interface StudentDashboardData {
   kpis: {
+    firstName: string;
     attendanceToday: string;
     averageGrade: number;
     pendingFees: number;
     myClass: string;
+    totalTasks: number;
   };
+  subjectPerformance: {
+    subject: string;
+    code: string;
+    score: number;
+    teacherName: string;
+  }[];
+  subjectAttendance: {
+    subject: string;
+    code: string;
+    percentage: number;
+  }[];
+  teachers: {
+    firstName: string;
+    lastName: string;
+    role: string;
+    subject: string;
+  }[];
   recentGrades: {
     subject: string;
     score: string;
@@ -154,14 +173,22 @@ export async function getStudentDashboard(auth: AuthContext): Promise<StudentDas
 
   const student = await prisma.student.findFirst({
     where: { userId: auth.userId, deletedAt: null },
-    include: { enrollments: { include: { class: true }, where: { class: { academicYear: '2025' } }, orderBy: { enrolledAt: 'desc' }, take: 1 } },
+    include: {
+      user: { select: { email: true } },
+      enrollments: {
+        include: { class: true },
+        where: { class: { academicYear: '2025' } },
+        orderBy: { enrolledAt: 'desc' },
+        take: 1,
+      },
+    },
   });
   if (!student) throw new NotFoundError('Student profile not found');
 
   const today = startOfDayUtc();
   const classId = student.enrollments[0]?.classId;
 
-  const [attendanceToday, grades, pendingInvoices] = await Promise.all([
+  const [attendanceToday, grades, pendingInvoices, subjects, attendanceRecords] = await Promise.all([
     classId
       ? prisma.attendance.findFirst({
           where: { studentId: student.id, classId, date: today },
@@ -170,9 +197,9 @@ export async function getStudentDashboard(auth: AuthContext): Promise<StudentDas
       : Promise.resolve(null),
     prisma.grade.findMany({
       where: { studentId: student.id },
-      include: { subject: { select: { name: true, code: true } } },
+      include: { subject: { select: { name: true, code: true, teacherId: true } } },
       orderBy: { recordedAt: 'desc' },
-      take: 10,
+      take: 50,
     }),
     prisma.feeInvoice.findMany({
       where: { studentId: student.id, status: { in: [InvoiceStatus.PENDING, InvoiceStatus.PARTIAL, InvoiceStatus.OVERDUE] } },
@@ -180,6 +207,18 @@ export async function getStudentDashboard(auth: AuthContext): Promise<StudentDas
       orderBy: { dueDate: 'asc' },
       take: 10,
     }),
+    classId
+      ? prisma.subject.findMany({
+          where: { classId },
+          include: { teacher: { select: { firstName: true, lastName: true, role: true } } },
+        })
+      : Promise.resolve([]),
+    classId
+      ? prisma.attendance.findMany({
+          where: { studentId: student.id, classId },
+          select: { date: true, status: true },
+        })
+      : Promise.resolve([]),
   ]);
 
   const avgGrade =
@@ -198,14 +237,68 @@ export async function getStudentDashboard(auth: AuthContext): Promise<StudentDas
     ? `${student.enrollments[0].class.name} ${student.enrollments[0].class.section}`
     : '—';
 
+  // Subject performance — latest grade per subject
+  const latestBySubject = new Map<string, (typeof grades)[0]>();
+  for (const g of grades) {
+    const key = g.subjectId;
+    if (!latestBySubject.has(key)) latestBySubject.set(key, g);
+  }
+  const subjectPerformance = Array.from(latestBySubject.values()).map((g) => ({
+    subject: g.subject.name,
+    code: g.subject.code,
+    score: Math.round((g.score.toNumber() / g.maxScore.toNumber()) * 100),
+    teacherName: subjects.find((s) => s.id === g.subjectId)?.teacher
+      ? `${subjects.find((s) => s.id === g.subjectId)!.teacher!.firstName} ${subjects.find((s) => s.id === g.subjectId)!.teacher!.lastName}`
+      : '—',
+  }));
+
+  // Attendance by subject — group attendance by class (each subject maps to the student's class)
+  const attendanceMap = new Map<string, { total: number; present: number }>();
+  for (const sub of subjects) {
+    attendanceMap.set(sub.id, { total: 0, present: 0 });
+  }
+  for (const rec of attendanceRecords) {
+    // Find which subjects belong to this class
+    for (const sub of subjects) {
+      const entry = attendanceMap.get(sub.id);
+      if (entry) {
+        entry.total += 1;
+        if (rec.status === 'PRESENT' || rec.status === 'LATE') entry.present += 1;
+      }
+    }
+  }
+  const subjectAttendance = subjects.map((sub) => {
+    const entry = attendanceMap.get(sub.id);
+    const pct = entry && entry.total > 0 ? Math.round((entry.present / entry.total) * 100) : 0;
+    return { subject: sub.name, code: sub.code, percentage: pct };
+  });
+
+  // Teachers — deduplicated
+  const teacherMap = new Map<string, { firstName: string; lastName: string; role: string; subject: string }>();
+  for (const sub of subjects) {
+    if (sub.teacher && !teacherMap.has(sub.teacherId ?? '')) {
+      teacherMap.set(sub.teacherId ?? '', {
+        firstName: sub.teacher.firstName,
+        lastName: sub.teacher.lastName,
+        role: sub.teacher.role,
+        subject: sub.name,
+      });
+    }
+  }
+
   return {
     kpis: {
+      firstName: student.firstName,
       attendanceToday: attendanceToday?.status ?? '—',
       averageGrade: avgGrade,
       pendingFees: Math.round(pendingFees * 100) / 100,
       myClass: className,
+      totalTasks: grades.length,
     },
-    recentGrades: grades.map((g) => ({
+    subjectPerformance,
+    subjectAttendance,
+    teachers: Array.from(teacherMap.values()),
+    recentGrades: grades.slice(0, 6).map((g) => ({
       subject: g.subject.name,
       score: g.score.toString(),
       maxScore: g.maxScore.toString(),

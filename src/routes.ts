@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import authRoutes from '@/modules/auth/auth.routes';
+import invitationRoutes from '@/modules/invitations/invitations.routes';
 import studentRoutes from '@/modules/students/students.routes';
 import attendanceRoutes from '@/modules/attendance/attendance.routes';
 import gradeRoutes from '@/modules/grades/grades.routes';
@@ -19,6 +20,7 @@ export function buildApiRouter(): Router {
   const router = Router();
 
   router.use('/auth', authRoutes);
+  router.use('/invitations', invitationRoutes);
   router.use('/students', studentRoutes);
   router.use('/attendance', attendanceRoutes);
   router.use('/grades', gradeRoutes);

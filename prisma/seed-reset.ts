@@ -12,7 +12,7 @@ async function main(): Promise<void> {
 
   console.log('Clearing all data...');
   const tables = [
-    'refresh_tokens', 'auth_tokens', 'documents', 'audit_logs',
+    'invitation_tokens', 'refresh_tokens', 'auth_tokens', 'documents', 'audit_logs',
     'notification_preferences', 'notifications', 'payments',
     'fee_invoices', 'fee_structures', 'grades', 'attendance',
     'enrollments', 'subjects', 'classes', 'staff', 'parents',
@@ -26,6 +26,7 @@ async function main(): Promise<void> {
   console.log('Creating tenant...');
   const tenant = await prisma.tenant.create({
     data: {
+      displayId: 'SCH-001',
       name: tenantName,
       academicYearStart: new Date(`${new Date().getUTCFullYear()}-01-01T00:00:00.000Z`),
       timezone: 'UTC',
@@ -48,6 +49,7 @@ async function main(): Promise<void> {
     data: {
       tenantId: tenant.id,
       userId: user.id,
+      displayId: 'SUPER-001',
       employeeNumber: 'SUPER-001',
       firstName: 'Feny',
       lastName: 'Emmanuel',

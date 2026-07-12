@@ -10,6 +10,14 @@ function auditCtx(req: Request): AuditContext {
   return { tenantId: req.auth?.tenantId ?? '', actorId: req.auth?.userId ?? null, ipAddress: clientIp(req), userAgent: userAgent(req) };
 }
 
+export async function listAll(_req: Request, res: Response): Promise<Response> {
+  return ok(res, await service.listAllTenants(), 'Tenants retrieved');
+}
+export async function remove(req: Request, res: Response): Promise<Response> {
+  const id = req.params.id as string;
+  await service.deleteTenant(id, auditCtx(req));
+  return ok(res, null, 'Tenant deleted');
+}
 export async function get(req: Request, res: Response): Promise<Response> {
   const auth = requireAuth(req);
   return ok(res, await service.getTenant(auth), 'Tenant retrieved');

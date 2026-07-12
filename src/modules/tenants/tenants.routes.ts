@@ -9,6 +9,8 @@ import { notificationPrefSchema, updateTenantSchema } from './tenants.schemas';
 const router = Router();
 router.use(authenticate);
 
+router.get('/', authorize('SUPER_ADMIN'), asyncHandler(controller.listAll));
+router.delete('/:id', authorize('SUPER_ADMIN'), asyncHandler(controller.remove));
 router.get('/me', asyncHandler(controller.get));
 router.put('/me', authorize('SUPER_ADMIN', 'ADMIN'), validate(updateTenantSchema), asyncHandler(controller.update));
 router.get('/me/notification-preferences', asyncHandler(controller.getPrefs));

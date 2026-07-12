@@ -10,6 +10,34 @@ function requireTenant(auth: AuthContext): string {
   return auth.tenantId;
 }
 
+export async function listAllTenants(): Promise<unknown[]> {
+  return prisma.tenant.findMany({
+    where: { deletedAt: null },
+    include: {
+      _count: {
+        select: { students: true, staff: true, classes: true, users: true },
+      },
+    },
+    orderBy: { createdAt: 'desc' },
+  });
+}
+
+export async function deleteTenant(tenantId: string, ctx: AuditContext): Promise<void> {
+  const tenant = await prisma.tenant.findFirst({ where: { id: tenantId, deletedAt: null } });
+  if (!tenant) throw new NotFoundError('Tenant');
+
+  const before = { ...tenant };
+
+  await prisma.$transaction(async (tx) => {
+    // Soft-delete all users in the tenant
+    await tx.user.updateMany({ where: { tenantId }, data: { deletedAt: new Date() } });
+    // Soft-delete the tenant itself
+    await tx.tenant.update({ where: { id: tenantId }, data: { deletedAt: new Date() } });
+  });
+
+  await writeAudit({ ...ctx, action: AuditAction.DELETE, tableName: 'tenants', recordId: tenantId, before, after: null });
+}
+
 export async function getTenant(auth: AuthContext): Promise<unknown> {
   const tenantId = requireTenant(auth);
   const tenant = await prisma.tenant.findFirst({ where: { id: tenantId, deletedAt: null } });

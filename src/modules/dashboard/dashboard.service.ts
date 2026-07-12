@@ -125,11 +125,13 @@ export async function getDashboard(auth: AuthContext): Promise<DashboardData> {
 
 export interface StudentDashboardData {
   kpis: {
+    studentId: string;
     firstName: string;
     attendanceToday: string;
     averageGrade: number;
     pendingFees: number;
     myClass: string;
+    classId: string | null;
     totalTasks: number;
   };
   subjectPerformance: {
@@ -288,11 +290,13 @@ export async function getStudentDashboard(auth: AuthContext): Promise<StudentDas
 
   return {
     kpis: {
+      studentId: student.id,
       firstName: student.firstName,
       attendanceToday: attendanceToday?.status ?? '—',
       averageGrade: avgGrade,
       pendingFees: Math.round(pendingFees * 100) / 100,
       myClass: className,
+      classId: classId ?? null,
       totalTasks: grades.length,
     },
     subjectPerformance,

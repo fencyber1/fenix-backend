@@ -3,7 +3,7 @@ import type { Application } from 'express';
 import { createApp } from '@/app';
 import { prisma } from '@/lib/prisma';
 import { resetDb } from '../helpers/db';
-import { createSchool, createStaffUser, createStudentRow, createUser } from '../helpers/factories';
+import { createTenant, createStaffUser, createStudentRow, createUser } from '../helpers/factories';
 import { agentFor, authHeader } from '../helpers/request';
 
 let app: Application;
@@ -18,15 +18,15 @@ afterAll(async () => {
 });
 
 async function adminCtx() {
-  const school = await createSchool();
-  const admin = await createUser({ email: 'admin@s.test', password: 'Str0ng!Pass99', role: 'ADMIN', schoolId: school.id });
-  return { school, admin, headers: authHeader(admin) };
+  const tenant = await createTenant();
+  const admin = await createUser({ email: 'admin@s.test', password: 'Str0ng!Pass99', role: 'ADMIN', tenantId: tenant.id });
+  return { tenant, admin, headers: authHeader(admin) };
 }
 
 describe('classes module', () => {
   it('creates, lists, updates, gets roster and soft-deletes a class', async () => {
-    const { school, headers } = await adminCtx();
-    const { staff } = await createStaffUser({ email: 't@s.test', password: 'Str0ng!Pass99', schoolId: school.id });
+    const { tenant, headers } = await adminCtx();
+    const { staff } = await createStaffUser({ email: 't@s.test', password: 'Str0ng!Pass99', tenantId: tenant.id });
 
     const create = await agentFor(app)
       .post('/api/v1/classes')
@@ -42,9 +42,9 @@ describe('classes module', () => {
     expect(update.body.data.section).toBe('C');
 
     // enroll students up to capacity
-    const s1 = await createStudentRow({ schoolId: school.id, studentNumber: 'R1' });
-    const s2 = await createStudentRow({ schoolId: school.id, studentNumber: 'R2' });
-    const s3 = await createStudentRow({ schoolId: school.id, studentNumber: 'R3' });
+    const s1 = await createStudentRow({ tenantId: tenant.id, studentNumber: 'R1' });
+    const s2 = await createStudentRow({ tenantId: tenant.id, studentNumber: 'R2' });
+    const s3 = await createStudentRow({ tenantId: tenant.id, studentNumber: 'R3' });
     expect((await agentFor(app).post(`/api/v1/classes/${classId}/enroll`).set(headers).send({ studentId: s1.id })).status).toBe(201);
     expect((await agentFor(app).post(`/api/v1/classes/${classId}/enroll`).set(headers).send({ studentId: s2.id })).status).toBe(201);
     // capacity 2 reached
@@ -62,8 +62,8 @@ describe('classes module', () => {
 
 describe('subjects module', () => {
   it('creates, lists, updates and deletes subjects', async () => {
-    const { school, headers } = await adminCtx();
-    const klass = await prisma.class.create({ data: { schoolId: school.id, name: 'G7', section: 'A', academicYear: '2026' } });
+    const { tenant, headers } = await adminCtx();
+    const klass = await prisma.class.create({ data: { tenantId: tenant.id, name: 'G7', section: 'A', academicYear: '2026' } });
     const create = await agentFor(app).post('/api/v1/subjects').set(headers).send({ classId: klass.id, name: 'Physics', code: 'PHY' });
     expect(create.status).toBe(201);
     const subjectId = create.body.data.id;
@@ -81,7 +81,7 @@ describe('subjects module', () => {
 
 describe('staff + users invite', () => {
   it('creates a staff member (and user account)', async () => {
-    const { headers } = await adminCtx();
+    const { tenant, headers } = await adminCtx();
     const res = await agentFor(app)
       .post('/api/v1/staff')
       .set(headers)
@@ -95,7 +95,7 @@ describe('staff + users invite', () => {
         joinDate: '2026-01-15',
       });
     expect(res.status).toBe(201);
-    const user = await prisma.user.findUnique({ where: { email: 'newteacher@s.test' } });
+    const user = await prisma.user.findUnique({ where: { tenantId_email: { tenantId: tenant.id, email: 'newteacher@s.test' } } });
     expect(user).not.toBeNull();
     expect(user?.isVerified).toBe(false);
 
@@ -119,8 +119,8 @@ describe('staff + users invite', () => {
   });
 
   it('invites a parent linked to a student', async () => {
-    const { school, headers } = await adminCtx();
-    const student = await createStudentRow({ schoolId: school.id });
+    const { tenant, headers } = await adminCtx();
+    const student = await createStudentRow({ tenantId: tenant.id });
     const res = await agentFor(app)
       .post('/api/v1/users/invite')
       .set(headers)
@@ -161,8 +161,8 @@ describe('schools + notification preferences', () => {
 
 describe('notifications module', () => {
   it('lists notifications and marks them read', async () => {
-    const { admin, headers } = await adminCtx();
-    await prisma.notification.create({ data: { userId: admin.id, type: 'GENERAL', title: 'Hi', body: 'Welcome' } });
+    const { tenant, admin, headers } = await adminCtx();
+    await prisma.notification.create({ data: { tenantId: tenant.id, userId: admin.id, type: 'GENERAL', title: 'Hi', body: 'Welcome' } });
     const list = await agentFor(app).get('/api/v1/notifications').set(headers);
     expect(list.body.data.length).toBe(1);
     const id = list.body.data[0].id;
@@ -175,8 +175,8 @@ describe('notifications module', () => {
 
 describe('dashboard module', () => {
   it('returns KPIs and chart data from real queries', async () => {
-    const { school, headers } = await adminCtx();
-    await createStudentRow({ schoolId: school.id, studentNumber: 'D1' });
+    const { tenant, headers } = await adminCtx();
+    await createStudentRow({ tenantId: tenant.id, studentNumber: 'D1' });
     const res = await agentFor(app).get('/api/v1/dashboard').set(headers);
     expect(res.status).toBe(200);
     expect(res.body.data.kpis.totalStudents).toBe(1);
@@ -187,13 +187,13 @@ describe('dashboard module', () => {
 
 describe('audit-logs module', () => {
   it('lists audit logs for admins with filters', async () => {
-    const { headers, school } = await adminCtx();
+    const { headers, tenant } = await adminCtx();
     // generate an auditable action
     await agentFor(app)
       .post('/api/v1/students')
       .set(headers)
       .send({ studentNumber: 'AUD-1', firstName: 'A', lastName: 'B', dob: '2015-01-01', gender: 'MALE', admissionDate: '2026-01-01' });
-    void school;
+    void tenant;
     const res = await agentFor(app).get('/api/v1/audit-logs?table=students').set(headers);
     expect(res.status).toBe(200);
     expect(res.body.data.length).toBeGreaterThan(0);
@@ -202,8 +202,8 @@ describe('audit-logs module', () => {
 
 describe('documents module (presigned uploads)', () => {
   it('presigns, confirms and lists a document', async () => {
-    const { school, headers } = await adminCtx();
-    const student = await createStudentRow({ schoolId: school.id });
+    const { tenant, headers } = await adminCtx();
+    const student = await createStudentRow({ tenantId: tenant.id });
 
     const presign = await agentFor(app)
       .post('/api/v1/documents/presign')
@@ -231,8 +231,8 @@ describe('documents module (presigned uploads)', () => {
   });
 
   it('rejects a disallowed mime type (400)', async () => {
-    const { school, headers } = await adminCtx();
-    const student = await createStudentRow({ schoolId: school.id });
+    const { tenant, headers } = await adminCtx();
+    const student = await createStudentRow({ tenantId: tenant.id });
     const res = await agentFor(app)
       .post('/api/v1/documents/presign')
       .set(headers)
@@ -241,8 +241,8 @@ describe('documents module (presigned uploads)', () => {
   });
 
   it('rejects a file over the size limit (400)', async () => {
-    const { school, headers } = await adminCtx();
-    const student = await createStudentRow({ schoolId: school.id });
+    const { tenant, headers } = await adminCtx();
+    const student = await createStudentRow({ tenantId: tenant.id });
     const res = await agentFor(app)
       .post('/api/v1/documents/presign')
       .set(headers)

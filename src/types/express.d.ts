@@ -6,7 +6,7 @@ import type { Role } from '@prisma/client';
 export interface AuthContext {
   userId: string;
   role: Role;
-  schoolId: string | null;
+  tenantId: string;
   email: string;
 }
 

@@ -3,7 +3,7 @@ import type { Application } from 'express';
 import { createApp } from '@/app';
 import { prisma } from '@/lib/prisma';
 import { resetDb } from '../helpers/db';
-import { createClassRow, createSchool, createStaffUser, createStudentRow, createUser } from '../helpers/factories';
+import { createClassRow, createTenant, createStaffUser, createStudentRow, createUser } from '../helpers/factories';
 import { agentFor, authHeader } from '../helpers/request';
 
 let app: Application;
@@ -19,13 +19,13 @@ afterAll(async () => {
 
 describe('grades flow', () => {
   it('records a grade with computed letter and produces a report card', async () => {
-    const school = await createSchool();
-    const admin = await createUser({ email: 'admin@s.test', password: 'Str0ng!Pass99', role: 'ADMIN', schoolId: school.id });
+    const tenant = await createTenant();
+    const admin = await createUser({ email: 'admin@s.test', password: 'Str0ng!Pass99', role: 'ADMIN', tenantId: tenant.id });
     const headers = authHeader(admin);
-    const klass = await createClassRow({ schoolId: school.id });
-    const student = await createStudentRow({ schoolId: school.id });
-    await prisma.enrollment.create({ data: { studentId: student.id, classId: klass.id, academicYear: '2026' } });
-    const subject = await prisma.subject.create({ data: { classId: klass.id, name: 'Mathematics', code: 'MATH' } });
+    const klass = await createClassRow({ tenantId: tenant.id });
+    const student = await createStudentRow({ tenantId: tenant.id });
+    await prisma.enrollment.create({ data: { tenantId: tenant.id, studentId: student.id, classId: klass.id, academicYear: '2026' } });
+    const subject = await prisma.subject.create({ data: { tenantId: tenant.id, classId: klass.id, name: 'Mathematics', code: 'MATH' } });
 
     const grade = await agentFor(app)
       .post('/api/v1/grades')
@@ -44,12 +44,12 @@ describe('grades flow', () => {
   });
 
   it('rejects score greater than maxScore (422)', async () => {
-    const school = await createSchool();
-    const admin = await createUser({ email: 'admin@s.test', password: 'Str0ng!Pass99', role: 'ADMIN', schoolId: school.id });
-    const klass = await createClassRow({ schoolId: school.id });
-    const student = await createStudentRow({ schoolId: school.id });
-    await prisma.enrollment.create({ data: { studentId: student.id, classId: klass.id, academicYear: '2026' } });
-    const subject = await prisma.subject.create({ data: { classId: klass.id, name: 'Science', code: 'SCI' } });
+    const tenant = await createTenant();
+    const admin = await createUser({ email: 'admin@s.test', password: 'Str0ng!Pass99', role: 'ADMIN', tenantId: tenant.id });
+    const klass = await createClassRow({ tenantId: tenant.id });
+    const student = await createStudentRow({ tenantId: tenant.id });
+    await prisma.enrollment.create({ data: { tenantId: tenant.id, studentId: student.id, classId: klass.id, academicYear: '2026' } });
+    const subject = await prisma.subject.create({ data: { tenantId: tenant.id, classId: klass.id, name: 'Science', code: 'SCI' } });
 
     const res = await agentFor(app)
       .post('/api/v1/grades')
@@ -59,12 +59,12 @@ describe('grades flow', () => {
   });
 
   it('forbids a teacher from grading a class they do not teach', async () => {
-    const school = await createSchool();
-    const { user: teacher } = await createStaffUser({ email: 't@s.test', password: 'Str0ng!Pass99', schoolId: school.id, role: 'TEACHER' });
-    const klass = await createClassRow({ schoolId: school.id });
-    const student = await createStudentRow({ schoolId: school.id });
-    await prisma.enrollment.create({ data: { studentId: student.id, classId: klass.id, academicYear: '2026' } });
-    const subject = await prisma.subject.create({ data: { classId: klass.id, name: 'History', code: 'HIST' } });
+    const tenant = await createTenant();
+    const { user: teacher } = await createStaffUser({ email: 't@s.test', password: 'Str0ng!Pass99', tenantId: tenant.id, role: 'TEACHER' });
+    const klass = await createClassRow({ tenantId: tenant.id });
+    const student = await createStudentRow({ tenantId: tenant.id });
+    await prisma.enrollment.create({ data: { tenantId: tenant.id, studentId: student.id, classId: klass.id, academicYear: '2026' } });
+    const subject = await prisma.subject.create({ data: { tenantId: tenant.id, classId: klass.id, name: 'History', code: 'HIST' } });
 
     const res = await agentFor(app)
       .post('/api/v1/grades')

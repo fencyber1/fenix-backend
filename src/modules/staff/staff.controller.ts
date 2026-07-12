@@ -7,7 +7,7 @@ import * as service from './staff.service';
 import type { CreateStaffInput, ListStaffQuery, UpdateStaffInput } from './staff.schemas';
 
 function auditCtx(req: Request): AuditContext {
-  return { actorId: req.auth?.userId ?? null, ipAddress: clientIp(req), userAgent: userAgent(req) };
+  return { tenantId: req.auth?.tenantId ?? '', actorId: req.auth?.userId ?? null, ipAddress: clientIp(req), userAgent: userAgent(req) };
 }
 
 export async function create(req: Request, res: Response): Promise<Response> {

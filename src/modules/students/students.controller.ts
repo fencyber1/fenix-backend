@@ -12,7 +12,7 @@ import type {
 } from './students.schemas';
 
 function auditCtx(req: Request): AuditContext {
-  return { actorId: req.auth?.userId ?? null, ipAddress: clientIp(req), userAgent: userAgent(req) };
+  return { tenantId: req.auth?.tenantId ?? '', actorId: req.auth?.userId ?? null, ipAddress: clientIp(req), userAgent: userAgent(req) };
 }
 
 export async function list(req: Request, res: Response): Promise<Response> {

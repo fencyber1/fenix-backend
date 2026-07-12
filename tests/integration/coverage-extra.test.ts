@@ -5,7 +5,7 @@ import { createApp } from '@/app';
 import { prisma } from '@/lib/prisma';
 import { createAuthToken } from '@/modules/auth/token.service';
 import { resetDb } from '../helpers/db';
-import { createClassRow, createSchool, createStaffUser, createStudentRow, createUser } from '../helpers/factories';
+import { createClassRow, createTenant, createStaffUser, createStudentRow, createUser } from '../helpers/factories';
 import { agentFor, authHeader, originHeader } from '../helpers/request';
 
 let app: Application;
@@ -20,9 +20,9 @@ afterAll(async () => {
 });
 
 async function adminCtx() {
-  const school = await createSchool();
-  const admin = await createUser({ email: 'admin@s.test', password: 'Str0ng!Pass99', role: 'ADMIN', schoolId: school.id });
-  return { school, admin, headers: authHeader(admin) };
+  const tenant = await createTenant();
+  const admin = await createUser({ email: 'admin@s.test', password: 'Str0ng!Pass99', role: 'ADMIN', tenantId: tenant.id });
+  return { tenant, admin, headers: authHeader(admin) };
 }
 
 describe('auth service extra paths', () => {
@@ -63,8 +63,8 @@ describe('auth service extra paths', () => {
   });
 
   it('verifies email using a valid token', async () => {
-    const school = await createSchool();
-    const user = await createUser({ email: 'unverified@s.test', password: 'Str0ng!Pass99', role: 'TEACHER', schoolId: school.id, isVerified: false });
+    const tenant = await createTenant();
+    const user = await createUser({ email: 'unverified@s.test', password: 'Str0ng!Pass99', role: 'TEACHER', tenantId: tenant.id, isVerified: false });
     const { rawToken } = await createAuthToken(user.id, TokenType.EMAIL_VERIFICATION);
     const res = await agentFor(app).post('/api/v1/auth/verify-email').set(originHeader).send({ token: rawToken });
     expect(res.status).toBe(200);
@@ -93,8 +93,8 @@ describe('auth service extra paths', () => {
 
 describe('students service extra paths', () => {
   it('updates a student and writes an UPDATE audit log', async () => {
-    const { school, headers, admin } = await adminCtx();
-    const student = await createStudentRow({ schoolId: school.id });
+    const { tenant, headers, admin } = await adminCtx();
+    const student = await createStudentRow({ tenantId: tenant.id });
     const res = await agentFor(app)
       .put(`/api/v1/students/${student.id}`)
       .set(headers)
@@ -106,8 +106,8 @@ describe('students service extra paths', () => {
   });
 
   it('creates a student with class enrollment in one call', async () => {
-    const { school, headers } = await adminCtx();
-    const klass = await createClassRow({ schoolId: school.id });
+    const { tenant, headers } = await adminCtx();
+    const klass = await createClassRow({ tenantId: tenant.id });
     const res = await agentFor(app)
       .post('/api/v1/students')
       .set(headers)
@@ -134,11 +134,11 @@ describe('students service extra paths', () => {
 
 describe('grades service extra paths', () => {
   it('updates an existing grade and lists grades', async () => {
-    const { school, headers } = await adminCtx();
-    const klass = await createClassRow({ schoolId: school.id });
-    const student = await createStudentRow({ schoolId: school.id });
-    await prisma.enrollment.create({ data: { studentId: student.id, classId: klass.id, academicYear: '2026' } });
-    const subject = await prisma.subject.create({ data: { classId: klass.id, name: 'Bio', code: 'BIO' } });
+    const { tenant, headers } = await adminCtx();
+    const klass = await createClassRow({ tenantId: tenant.id });
+    const student = await createStudentRow({ tenantId: tenant.id });
+    await prisma.enrollment.create({ data: { tenantId: tenant.id, studentId: student.id, classId: klass.id, academicYear: '2026' } });
+    const subject = await prisma.subject.create({ data: { tenantId: tenant.id, classId: klass.id, name: 'Bio', code: 'BIO' } });
 
     const create = await agentFor(app)
       .post('/api/v1/grades')
@@ -154,10 +154,10 @@ describe('grades service extra paths', () => {
   });
 
   it('rejects grading a student not enrolled in the subject class (400)', async () => {
-    const { school, headers } = await adminCtx();
-    const klass = await createClassRow({ schoolId: school.id });
-    const subject = await prisma.subject.create({ data: { classId: klass.id, name: 'Chem', code: 'CHEM' } });
-    const stranger = await createStudentRow({ schoolId: school.id, studentNumber: 'NOENR' });
+    const { tenant, headers } = await adminCtx();
+    const klass = await createClassRow({ tenantId: tenant.id });
+    const subject = await prisma.subject.create({ data: { tenantId: tenant.id, classId: klass.id, name: 'Chem', code: 'CHEM' } });
+    const stranger = await createStudentRow({ tenantId: tenant.id, studentNumber: 'NOENR' });
     const res = await agentFor(app)
       .post('/api/v1/grades')
       .set(headers)
@@ -168,8 +168,8 @@ describe('grades service extra paths', () => {
 
 describe('fees service extra paths', () => {
   it('lists invoices and fetches a single invoice with balance', async () => {
-    const { school, headers } = await adminCtx();
-    const student = await createStudentRow({ schoolId: school.id });
+    const { tenant, headers } = await adminCtx();
+    const student = await createStudentRow({ tenantId: tenant.id });
     const structure = await agentFor(app)
       .post('/api/v1/fees/structures')
       .set(headers)
@@ -194,10 +194,10 @@ describe('fees service extra paths', () => {
 
 describe('attendance service extra paths', () => {
   it('corrects an attendance record and lists by student', async () => {
-    const { school, headers } = await adminCtx();
-    const klass = await createClassRow({ schoolId: school.id });
-    const student = await createStudentRow({ schoolId: school.id });
-    await prisma.enrollment.create({ data: { studentId: student.id, classId: klass.id, academicYear: '2026' } });
+    const { tenant, headers } = await adminCtx();
+    const klass = await createClassRow({ tenantId: tenant.id });
+    const student = await createStudentRow({ tenantId: tenant.id });
+    await prisma.enrollment.create({ data: { tenantId: tenant.id, studentId: student.id, classId: klass.id, academicYear: '2026' } });
     await agentFor(app)
       .post('/api/v1/attendance')
       .set(headers)
@@ -215,8 +215,8 @@ describe('attendance service extra paths', () => {
 
 describe('staff service extra paths', () => {
   it('gets, updates and soft-deletes a staff member', async () => {
-    const { school, headers } = await adminCtx();
-    const { staff, user } = await createStaffUser({ email: 'staffx@s.test', password: 'Str0ng!Pass99', schoolId: school.id });
+    const { tenant, headers } = await adminCtx();
+    const { staff, user } = await createStaffUser({ email: 'staffx@s.test', password: 'Str0ng!Pass99', tenantId: tenant.id });
 
     const get = await agentFor(app).get(`/api/v1/staff/${staff.id}`).set(headers);
     expect(get.status).toBe(200);

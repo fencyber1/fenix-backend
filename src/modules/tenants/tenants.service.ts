@@ -3,26 +3,26 @@ import { prisma } from '@/lib/prisma';
 import { ForbiddenError, NotFoundError } from '@/utils/errors';
 import { writeAudit, type AuditContext } from '@/modules/audit/audit.service';
 import type { AuthContext } from '@/types/express';
-import type { NotificationPrefInput, UpdateSchoolInput } from './schools.schemas';
+import type { NotificationPrefInput, UpdateTenantInput } from './tenants.schemas';
 
-function requireSchool(auth: AuthContext): string {
-  if (!auth.schoolId) throw new ForbiddenError('User is not associated with a school');
-  return auth.schoolId;
+function requireTenant(auth: AuthContext): string {
+  if (!auth.tenantId) throw new ForbiddenError('User is not associated with a tenant');
+  return auth.tenantId;
 }
 
-export async function getSchool(auth: AuthContext): Promise<unknown> {
-  const schoolId = requireSchool(auth);
-  const school = await prisma.school.findFirst({ where: { id: schoolId, deletedAt: null } });
-  if (!school) throw new NotFoundError('School');
-  return school;
+export async function getTenant(auth: AuthContext): Promise<unknown> {
+  const tenantId = requireTenant(auth);
+  const tenant = await prisma.tenant.findFirst({ where: { id: tenantId, deletedAt: null } });
+  if (!tenant) throw new NotFoundError('Tenant');
+  return tenant;
 }
 
-export async function updateSchool(auth: AuthContext, input: UpdateSchoolInput, ctx: AuditContext): Promise<unknown> {
-  const schoolId = requireSchool(auth);
-  const before = await prisma.school.findFirst({ where: { id: schoolId, deletedAt: null } });
-  if (!before) throw new NotFoundError('School');
-  const updated = await prisma.school.update({
-    where: { id: schoolId },
+export async function updateTenant(auth: AuthContext, input: UpdateTenantInput, ctx: AuditContext): Promise<unknown> {
+  const tenantId = requireTenant(auth);
+  const before = await prisma.tenant.findFirst({ where: { id: tenantId, deletedAt: null } });
+  if (!before) throw new NotFoundError('Tenant');
+  const updated = await prisma.tenant.update({
+    where: { id: tenantId },
     data: {
       ...(input.name !== undefined && { name: input.name }),
       ...(input.logoUrl !== undefined && { logoUrl: input.logoUrl }),
@@ -33,7 +33,7 @@ export async function updateSchool(auth: AuthContext, input: UpdateSchoolInput, 
       ...(input.timezone !== undefined && { timezone: input.timezone }),
     },
   });
-  await writeAudit({ ...ctx, action: AuditAction.UPDATE, tableName: 'schools', recordId: schoolId, before, after: updated });
+  await writeAudit({ ...ctx, action: AuditAction.UPDATE, tableName: 'tenants', recordId: tenantId, before, after: updated });
   return updated;
 }
 
@@ -42,11 +42,12 @@ export async function getNotificationPreferences(auth: AuthContext): Promise<unk
 }
 
 export async function setNotificationPreferences(auth: AuthContext, input: NotificationPrefInput): Promise<unknown[]> {
+  const tenantId = requireTenant(auth);
   await prisma.$transaction(
     input.preferences.map((p) =>
       prisma.notificationPreference.upsert({
-        where: { userId_type_channel: { userId: auth.userId, type: p.type, channel: p.channel } },
-        create: { userId: auth.userId, type: p.type, channel: p.channel, enabled: p.enabled },
+        where: { tenantId_userId_type_channel: { tenantId, userId: auth.userId, type: p.type, channel: p.channel } },
+        create: { tenantId, userId: auth.userId, type: p.type, channel: p.channel, enabled: p.enabled },
         update: { enabled: p.enabled },
       }),
     ),

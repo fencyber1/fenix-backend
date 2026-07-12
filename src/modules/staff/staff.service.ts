@@ -13,15 +13,15 @@ import type { CreateStaffInput, ListStaffQuery, UpdateStaffInput } from './staff
 
 const SORTABLE = ['createdAt', 'lastName', 'firstName', 'employeeNumber', 'role'] as const;
 
-function requireSchool(auth: AuthContext): string {
-  if (!auth.schoolId) throw new ForbiddenError('User is not associated with a school');
-  return auth.schoolId;
+function requireTenant(auth: AuthContext): string {
+  if (!auth.tenantId) throw new ForbiddenError('User is not associated with a tenant');
+  return auth.tenantId;
 }
 
 export async function createStaff(auth: AuthContext, input: CreateStaffInput, ctx: AuditContext): Promise<unknown> {
-  const schoolId = requireSchool(auth);
+  const tenantId = requireTenant(auth);
 
-  const existing = await prisma.user.findUnique({ where: { email: input.email } });
+  const existing = await prisma.user.findFirst({ where: { email: input.email, tenantId } });
   if (existing) throw new ConflictError('A user with this email already exists', [{ field: 'email', message: 'Already in use' }]);
 
   const tempPassword = generateTempPassword();
@@ -33,14 +33,14 @@ export async function createStaff(auth: AuthContext, input: CreateStaffInput, ct
         email: input.email,
         passwordHash,
         role: input.systemRole as Role,
-        schoolId,
+        tenantId,
         isVerified: false,
       },
     });
     const staff = await tx.staff.create({
       data: {
         userId: user.id,
-        schoolId,
+        tenantId,
         employeeNumber: input.employeeNumber,
         firstName: input.firstName,
         lastName: input.lastName,
@@ -68,10 +68,10 @@ export async function createStaff(auth: AuthContext, input: CreateStaffInput, ct
 }
 
 export async function listStaff(auth: AuthContext, query: ListStaffQuery): Promise<{ items: unknown[]; meta: PaginationMeta }> {
-  const schoolId = requireSchool(auth);
+  const tenantId = requireTenant(auth);
   const { skip, take, page, limit } = resolvePagination(query);
   const where: Prisma.StaffWhereInput = {
-    schoolId,
+    tenantId,
     deletedAt: null,
     ...(query.department && { department: query.department }),
     ...(query.search && {
@@ -97,9 +97,9 @@ export async function listStaff(auth: AuthContext, query: ListStaffQuery): Promi
 }
 
 export async function getStaff(auth: AuthContext, id: string): Promise<unknown> {
-  const schoolId = requireSchool(auth);
+  const tenantId = requireTenant(auth);
   const staff = await prisma.staff.findFirst({
-    where: { id, schoolId, deletedAt: null },
+    where: { id, tenantId, deletedAt: null },
     include: {
       user: { select: { email: true, role: true, isVerified: true, lastLoginAt: true } },
       classesAsTeacher: { where: { deletedAt: null }, select: { id: true, name: true, section: true } },
@@ -111,8 +111,8 @@ export async function getStaff(auth: AuthContext, id: string): Promise<unknown> 
 }
 
 export async function updateStaff(auth: AuthContext, id: string, input: UpdateStaffInput, ctx: AuditContext): Promise<unknown> {
-  const schoolId = requireSchool(auth);
-  const before = await prisma.staff.findFirst({ where: { id, schoolId, deletedAt: null } });
+  const tenantId = requireTenant(auth);
+  const before = await prisma.staff.findFirst({ where: { id, tenantId, deletedAt: null } });
   if (!before) throw new NotFoundError('Staff');
   const data: Prisma.StaffUpdateInput = {
     ...(input.employeeNumber !== undefined && { employeeNumber: input.employeeNumber }),
@@ -129,8 +129,8 @@ export async function updateStaff(auth: AuthContext, id: string, input: UpdateSt
 }
 
 export async function softDeleteStaff(auth: AuthContext, id: string, ctx: AuditContext): Promise<void> {
-  const schoolId = requireSchool(auth);
-  const before = await prisma.staff.findFirst({ where: { id, schoolId, deletedAt: null }, include: { user: true } });
+  const tenantId = requireTenant(auth);
+  const before = await prisma.staff.findFirst({ where: { id, tenantId, deletedAt: null }, include: { user: true } });
   if (!before) throw new NotFoundError('Staff');
   await prisma.$transaction(async (tx) => {
     const after = await tx.staff.update({ where: { id }, data: { deletedAt: new Date() } });

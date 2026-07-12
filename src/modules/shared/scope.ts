@@ -77,7 +77,7 @@ export async function studentScopeWhere(auth: AuthContext): Promise<Prisma.Stude
     case 'SUPER_ADMIN':
       return {};
     case 'ADMIN':
-      return auth.schoolId ? { schoolId: auth.schoolId } : { id: '__none__' };
+      return { tenantId: auth.tenantId };
     case 'TEACHER': {
       const ids = await teacherStudentIds(auth.userId);
       return { id: { in: ids.length ? ids : ['__none__'] } };

@@ -6,7 +6,7 @@ import { UnauthorizedError } from '@/utils/errors';
 export interface AccessTokenPayload {
   sub: string; // user id
   role: Role;
-  schoolId: string | null;
+  tenantId: string;
   email: string;
 }
 

@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma';
 import { logger } from '@/lib/logger';
 
 export interface AuditContext {
+  tenantId: string;
   actorId: string | null;
   ipAddress?: string | null;
   userAgent?: string | null;
@@ -29,6 +30,7 @@ export async function writeAudit(
   try {
     await client.auditLog.create({
       data: {
+        tenantId: input.tenantId,
         actorId: input.actorId,
         action: input.action,
         tableName: input.tableName,

@@ -27,7 +27,7 @@ export interface PublicUser {
   id: string;
   email: string;
   role: User['role'];
-  schoolId: string | null;
+  tenantId: string;
   isVerified: boolean;
 }
 
@@ -36,7 +36,7 @@ function toPublicUser(user: User): PublicUser {
     id: user.id,
     email: user.email,
     role: user.role,
-    schoolId: user.schoolId,
+    tenantId: user.tenantId,
     isVerified: user.isVerified,
   };
 }
@@ -69,7 +69,7 @@ export async function login(input: LoginInput, meta: RequestMeta): Promise<Login
   if (!user.isVerified) throw new UnauthorizedError('Please verify your email before logging in');
 
   const tokens = await issueTokens(
-    { sub: user.id, role: user.role, schoolId: user.schoolId, email: user.email },
+    { sub: user.id, role: user.role, tenantId: user.tenantId, email: user.email },
     meta,
   );
 
@@ -79,6 +79,7 @@ export async function login(input: LoginInput, meta: RequestMeta): Promise<Login
   });
 
   await writeAudit({
+    tenantId: user.tenantId,
     actorId: user.id,
     action: AuditAction.LOGIN,
     tableName: 'users',
@@ -104,7 +105,7 @@ export async function refresh(rawRefreshToken: string, meta: RequestMeta): Promi
   // Rotation: revoke the presented token, then issue a new pair.
   await revokeRefreshToken(payload.jti);
   const tokens = await issueTokens(
-    { sub: user.id, role: user.role, schoolId: user.schoolId, email: user.email },
+    { sub: user.id, role: user.role, tenantId: user.tenantId, email: user.email },
     meta,
   );
   return { ...tokens, user: toPublicUser(user) };
@@ -121,7 +122,9 @@ export async function logout(rawRefreshToken: string | undefined, actorId: strin
     }
   }
   if (actorId) {
+    const actor = await prisma.user.findFirst({ where: { id: actorId, deletedAt: null }, select: { tenantId: true } });
     await writeAudit({
+      tenantId: actor?.tenantId ?? '',
       actorId,
       action: AuditAction.LOGOUT,
       tableName: 'users',
@@ -157,9 +160,11 @@ export async function resetPassword(token: string, newPassword: string, meta: Re
   const userId = await consumeAuthToken(token, TokenType.PASSWORD_RESET);
   if (!userId) throw new BadRequestError('Reset link is invalid or has expired');
   const passwordHash = await hashPassword(newPassword);
+  const user = await prisma.user.findFirst({ where: { id: userId, deletedAt: null }, select: { tenantId: true } });
   await prisma.user.update({ where: { id: userId }, data: { passwordHash } });
   await revokeAllUserTokens(userId);
   await writeAudit({
+    tenantId: user?.tenantId ?? '',
     actorId: userId,
     action: AuditAction.UPDATE,
     tableName: 'users',
@@ -192,6 +197,7 @@ export async function changePassword(
   await prisma.user.update({ where: { id: userId }, data: { passwordHash } });
   await revokeAllUserTokens(userId);
   await writeAudit({
+    tenantId: user.tenantId,
     actorId: userId,
     action: AuditAction.UPDATE,
     tableName: 'users',

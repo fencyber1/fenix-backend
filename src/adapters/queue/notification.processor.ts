@@ -18,6 +18,7 @@ export async function processNotificationJob(job: NotificationJob): Promise<void
     tasks.push(
       prisma.notification.create({
         data: {
+          tenantId: job.tenantId,
           userId: job.userId,
           type: job.type,
           channel: NotificationChannel.IN_APP,
@@ -35,6 +36,7 @@ export async function processNotificationJob(job: NotificationJob): Promise<void
         .then(() =>
           prisma.notification.create({
             data: {
+              tenantId: job.tenantId,
               userId: job.userId,
               type: job.type,
               channel: NotificationChannel.EMAIL,
@@ -53,6 +55,7 @@ export async function processNotificationJob(job: NotificationJob): Promise<void
         .then(() =>
           prisma.notification.create({
             data: {
+              tenantId: job.tenantId,
               userId: job.userId,
               type: job.type,
               channel: NotificationChannel.SMS,

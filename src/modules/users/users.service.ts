@@ -9,9 +9,9 @@ import { getEmail } from '@/adapters/email';
 import type { AuthContext } from '@/types/express';
 import type { InviteUserInput } from './users.schemas';
 
-function requireSchool(auth: AuthContext): string {
-  if (!auth.schoolId) throw new ForbiddenError('User is not associated with a school');
-  return auth.schoolId;
+function requireTenant(auth: AuthContext): string {
+  if (!auth.tenantId) throw new ForbiddenError('User is not associated with a tenant');
+  return auth.tenantId;
 }
 
 /**
@@ -19,17 +19,17 @@ function requireSchool(auth: AuthContext): string {
  * email-verification link. PARENT/STUDENT roles are linked to a student record.
  */
 export async function inviteUser(auth: AuthContext, input: InviteUserInput, ctx: AuditContext): Promise<{ userId: string; email: string }> {
-  const schoolId = requireSchool(auth);
+  const tenantId = requireTenant(auth);
 
-  const existing = await prisma.user.findUnique({ where: { email: input.email } });
+  const existing = await prisma.user.findFirst({ where: { email: input.email, tenantId } });
   if (existing) throw new ConflictError('A user with this email already exists', [{ field: 'email', message: 'Already in use' }]);
 
   if ((input.role === 'PARENT' || input.role === 'STUDENT') && !input.studentId) {
     throw new BadRequestError('studentId is required for PARENT and STUDENT roles');
   }
   if (input.studentId) {
-    const student = await prisma.student.findFirst({ where: { id: input.studentId, schoolId, deletedAt: null }, select: { id: true, userId: true } });
-    if (!student) throw new BadRequestError('Student not found in your school');
+    const student = await prisma.student.findFirst({ where: { id: input.studentId, tenantId, deletedAt: null }, select: { id: true, userId: true } });
+    if (!student) throw new BadRequestError('Student not found in your tenant');
     if (input.role === 'STUDENT' && student.userId) throw new ConflictError('Student already has a linked account');
   }
 
@@ -38,12 +38,13 @@ export async function inviteUser(auth: AuthContext, input: InviteUserInput, ctx:
 
   const created = await prisma.$transaction(async (tx) => {
     const user = await tx.user.create({
-      data: { email: input.email, passwordHash, role: input.role as Role, schoolId, isVerified: false },
+      data: { email: input.email, passwordHash, role: input.role as Role, tenantId, isVerified: false },
     });
 
     if (input.role === 'PARENT' && input.studentId) {
       await tx.parent.create({
         data: {
+          tenantId,
           userId: user.id,
           studentId: input.studentId,
           relationship: input.relationship ?? 'Guardian',

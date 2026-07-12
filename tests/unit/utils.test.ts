@@ -25,7 +25,7 @@ describe('password utils', () => {
 
 describe('jwt utils', () => {
   it('signs and verifies an access token', () => {
-    const token = signAccessToken({ sub: 'u1', role: 'ADMIN', schoolId: 's1', email: 'a@b.com' });
+    const token = signAccessToken({ sub: 'u1', role: 'ADMIN', tenantId: 's1', email: 'a@b.com' });
     const payload = verifyAccessToken(token);
     expect(payload.sub).toBe('u1');
     expect(payload.role).toBe('ADMIN');

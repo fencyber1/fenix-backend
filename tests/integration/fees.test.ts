@@ -3,7 +3,7 @@ import type { Application } from 'express';
 import { createApp } from '@/app';
 import { prisma } from '@/lib/prisma';
 import { resetDb } from '../helpers/db';
-import { createSchool, createStudentRow, createUser } from '../helpers/factories';
+import { createTenant, createStudentRow, createUser } from '../helpers/factories';
 import { agentFor, authHeader } from '../helpers/request';
 
 let app: Application;
@@ -18,10 +18,10 @@ afterAll(async () => {
 });
 
 async function setup() {
-  const school = await createSchool();
-  const admin = await createUser({ email: 'admin@s.test', password: 'Str0ng!Pass99', role: 'ADMIN', schoolId: school.id });
-  const student = await createStudentRow({ schoolId: school.id });
-  return { school, admin, student, headers: authHeader(admin) };
+  const tenant = await createTenant();
+  const admin = await createUser({ email: 'admin@s.test', password: 'Str0ng!Pass99', role: 'ADMIN', tenantId: tenant.id });
+  const student = await createStudentRow({ tenantId: tenant.id });
+  return { tenant, admin, student, headers: authHeader(admin) };
 }
 
 describe('fees flow', () => {

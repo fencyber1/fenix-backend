@@ -5,6 +5,7 @@ import type { NotificationChannel, NotificationType } from '@prisma/client';
  * channel preferences and dispatches IN_APP / EMAIL / SMS accordingly.
  */
 export interface NotificationJob {
+  tenantId: string;
   userId: string;
   type: NotificationType;
   title: string;

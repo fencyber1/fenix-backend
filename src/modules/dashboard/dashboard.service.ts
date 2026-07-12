@@ -32,7 +32,7 @@ export async function getDashboard(auth: AuthContext): Promise<DashboardData> {
     throw new ForbiddenError('Dashboard is available to staff only');
   }
   const scope = await studentScopeWhere(auth);
-  const schoolFilter = auth.role === 'SUPER_ADMIN' ? {} : { schoolId: auth.schoolId ?? '__none__' };
+  const schoolFilter = auth.role === 'SUPER_ADMIN' ? {} : { tenantId: auth.tenantId ?? '__none__' };
 
   const today = startOfDayUtc();
   const monthStart = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), 1));

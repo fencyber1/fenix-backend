@@ -8,7 +8,7 @@ import classRoutes from '@/modules/classes/classes.routes';
 import subjectRoutes from '@/modules/subjects/subjects.routes';
 import staffRoutes from '@/modules/staff/staff.routes';
 import userRoutes from '@/modules/users/users.routes';
-import schoolRoutes from '@/modules/schools/schools.routes';
+import tenantRoutes from '@/modules/tenants/tenants.routes';
 import notificationRoutes from '@/modules/notifications/notifications.routes';
 import auditRoutes from '@/modules/audit/audit.routes';
 import documentRoutes from '@/modules/documents/documents.routes';
@@ -27,7 +27,7 @@ export function buildApiRouter(): Router {
   router.use('/subjects', subjectRoutes);
   router.use('/staff', staffRoutes);
   router.use('/users', userRoutes);
-  router.use('/schools', schoolRoutes);
+  router.use('/tenants', tenantRoutes);
   router.use('/notifications', notificationRoutes);
   router.use('/audit-logs', auditRoutes);
   router.use('/documents', documentRoutes);

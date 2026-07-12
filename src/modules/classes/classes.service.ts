@@ -14,17 +14,17 @@ import type {
 
 const SORTABLE = ['createdAt', 'name', 'section', 'academicYear'] as const;
 
-function requireSchool(auth: AuthContext): string {
-  if (!auth.schoolId) throw new ForbiddenError('User is not associated with a school');
-  return auth.schoolId;
+function requireTenant(auth: AuthContext): string {
+  if (!auth.tenantId) throw new ForbiddenError('User is not associated with a tenant');
+  return auth.tenantId;
 }
 
-async function assertTeacherInSchool(schoolId: string, teacherId: string): Promise<void> {
+async function assertTeacherInTenant(tenantId: string, teacherId: string): Promise<void> {
   const staff = await prisma.staff.findFirst({
-    where: { id: teacherId, schoolId, deletedAt: null },
+    where: { id: teacherId, tenantId, deletedAt: null },
     select: { id: true },
   });
-  if (!staff) throw new BadRequestError('Class teacher must be staff in your school');
+  if (!staff) throw new BadRequestError('Class teacher must be staff in your tenant');
 }
 
 export async function createClass(
@@ -32,12 +32,12 @@ export async function createClass(
   input: CreateClassInput,
   ctx: AuditContext,
 ): Promise<unknown> {
-  const schoolId = requireSchool(auth);
-  if (input.classTeacherId) await assertTeacherInSchool(schoolId, input.classTeacherId);
+  const tenantId = requireTenant(auth);
+  if (input.classTeacherId) await assertTeacherInTenant(tenantId, input.classTeacherId);
 
   const klass = await prisma.class.create({
     data: {
-      schoolId,
+      tenantId,
       name: input.name,
       section: input.section,
       academicYear: input.academicYear,
@@ -53,10 +53,10 @@ export async function listClasses(
   auth: AuthContext,
   query: ListClassesQuery,
 ): Promise<{ items: unknown[]; meta: PaginationMeta }> {
-  const schoolId = requireSchool(auth);
+  const tenantId = requireTenant(auth);
   const { skip, take, page, limit } = resolvePagination(query);
   const where: Prisma.ClassWhereInput = {
-    schoolId,
+    tenantId,
     deletedAt: null,
     ...(query.academicYear && { academicYear: query.academicYear }),
     ...(query.search && {
@@ -84,9 +84,9 @@ export async function listClasses(
 }
 
 export async function getClass(auth: AuthContext, id: string): Promise<unknown> {
-  const schoolId = requireSchool(auth);
+  const tenantId = requireTenant(auth);
   const klass = await prisma.class.findFirst({
-    where: { id, schoolId, deletedAt: null },
+    where: { id, tenantId, deletedAt: null },
     include: {
       classTeacher: { select: { id: true, firstName: true, lastName: true } },
       subjects: { include: { teacher: { select: { id: true, firstName: true, lastName: true } } } },
@@ -98,8 +98,8 @@ export async function getClass(auth: AuthContext, id: string): Promise<unknown> 
 }
 
 export async function getRoster(auth: AuthContext, id: string): Promise<unknown[]> {
-  const schoolId = requireSchool(auth);
-  const klass = await prisma.class.findFirst({ where: { id, schoolId, deletedAt: null }, select: { id: true } });
+  const tenantId = requireTenant(auth);
+  const klass = await prisma.class.findFirst({ where: { id, tenantId, deletedAt: null }, select: { id: true } });
   if (!klass) throw new NotFoundError('Class');
   const enrollments = await prisma.enrollment.findMany({
     where: { classId: id, student: { deletedAt: null } },
@@ -117,10 +117,10 @@ export async function updateClass(
   input: UpdateClassInput,
   ctx: AuditContext,
 ): Promise<unknown> {
-  const schoolId = requireSchool(auth);
-  const before = await prisma.class.findFirst({ where: { id, schoolId, deletedAt: null } });
+  const tenantId = requireTenant(auth);
+  const before = await prisma.class.findFirst({ where: { id, tenantId, deletedAt: null } });
   if (!before) throw new NotFoundError('Class');
-  if (input.classTeacherId) await assertTeacherInSchool(schoolId, input.classTeacherId);
+  if (input.classTeacherId) await assertTeacherInTenant(tenantId, input.classTeacherId);
 
   const data: Prisma.ClassUpdateInput = {
     ...(input.name !== undefined && { name: input.name }),
@@ -139,8 +139,8 @@ export async function updateClass(
 }
 
 export async function softDeleteClass(auth: AuthContext, id: string, ctx: AuditContext): Promise<void> {
-  const schoolId = requireSchool(auth);
-  const before = await prisma.class.findFirst({ where: { id, schoolId, deletedAt: null } });
+  const tenantId = requireTenant(auth);
+  const before = await prisma.class.findFirst({ where: { id, tenantId, deletedAt: null } });
   if (!before) throw new NotFoundError('Class');
   const after = await prisma.class.update({ where: { id }, data: { deletedAt: new Date() } });
   await writeAudit({ ...ctx, action: AuditAction.DELETE, tableName: 'classes', recordId: id, before, after });
@@ -152,20 +152,21 @@ export async function enrollStudent(
   input: EnrollStudentInput,
   ctx: AuditContext,
 ): Promise<unknown> {
-  const schoolId = requireSchool(auth);
-  const klass = await prisma.class.findFirst({ where: { id: classId, schoolId, deletedAt: null } });
+  const tenantId = requireTenant(auth);
+  const klass = await prisma.class.findFirst({ where: { id: classId, tenantId, deletedAt: null } });
   if (!klass) throw new NotFoundError('Class');
   const student = await prisma.student.findFirst({
-    where: { id: input.studentId, schoolId, deletedAt: null },
+    where: { id: input.studentId, tenantId, deletedAt: null },
     select: { id: true },
   });
-  if (!student) throw new BadRequestError('Student not found in your school');
+  if (!student) throw new BadRequestError('Student not found in your tenant');
 
   const count = await prisma.enrollment.count({ where: { classId } });
   if (count >= klass.capacity) throw new BadRequestError('Class is at full capacity');
 
   const enrollment = await prisma.enrollment.create({
     data: {
+      tenantId,
       classId,
       studentId: input.studentId,
       academicYear: input.academicYear ?? klass.academicYear,

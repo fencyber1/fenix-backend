@@ -23,14 +23,14 @@ export async function authenticate(
 
     const user = await prisma.user.findFirst({
       where: { id: payload.sub, deletedAt: null, isActive: true },
-      select: { id: true, role: true, schoolId: true, email: true, isVerified: true },
+      select: { id: true, role: true, tenantId: true, email: true, isVerified: true },
     });
     if (!user) throw new UnauthorizedError('User no longer active');
 
     req.auth = {
       userId: user.id,
       role: user.role,
-      schoolId: user.schoolId,
+      tenantId: user.tenantId,
       email: user.email,
     };
     next();

@@ -40,6 +40,7 @@ export async function confirmUpload(auth: AuthContext, input: ConfirmDocumentInp
   const fileUrl = getStorage().getPublicUrl(input.key);
   const doc = await prisma.document.create({
     data: {
+      tenantId: auth.tenantId!,
       studentId: input.studentId,
       name: input.name,
       type: input.type,

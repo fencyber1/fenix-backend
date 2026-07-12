@@ -3,7 +3,7 @@ import type { Application } from 'express';
 import { createApp } from '@/app';
 import { prisma } from '@/lib/prisma';
 import { resetDb } from '../helpers/db';
-import { createSchool, createStaffUser, createStudentRow, createUser } from '../helpers/factories';
+import { createTenant, createStaffUser, createStudentRow, createUser } from '../helpers/factories';
 import { agentFor, authHeader } from '../helpers/request';
 
 let app: Application;
@@ -19,9 +19,9 @@ afterAll(async () => {
 });
 
 async function adminCtx() {
-  const school = await createSchool();
-  const user = await createUser({ email: 'admin@s.test', password: 'Str0ng!Pass99', role: 'ADMIN', schoolId: school.id });
-  return { school, user, headers: authHeader(user) };
+  const tenant = await createTenant();
+  const user = await createUser({ email: 'admin@s.test', password: 'Str0ng!Pass99', role: 'ADMIN', tenantId: tenant.id });
+  return { tenant, user, headers: authHeader(user) };
 }
 
 describe('students CRUD', () => {
@@ -53,9 +53,9 @@ describe('students CRUD', () => {
   });
 
   it('lists with server-side pagination and search', async () => {
-    const { school, headers } = await adminCtx();
+    const { tenant, headers } = await adminCtx();
     for (let i = 0; i < 25; i += 1) {
-      await createStudentRow({ schoolId: school.id, studentNumber: `N-${i}`, firstName: `Kid${i}`, lastName: 'Smith' });
+      await createStudentRow({ tenantId: tenant.id, studentNumber: `N-${i}`, firstName: `Kid${i}`, lastName: 'Smith' });
     }
     const page1 = await agentFor(app).get('/api/v1/students?page=1&limit=10').set(headers);
     expect(page1.status).toBe(200);
@@ -68,8 +68,8 @@ describe('students CRUD', () => {
   });
 
   it('soft-deletes (never hard delete) and excludes from list', async () => {
-    const { school, headers } = await adminCtx();
-    const student = await createStudentRow({ schoolId: school.id });
+    const { tenant, headers } = await adminCtx();
+    const student = await createStudentRow({ tenantId: tenant.id });
     const del = await agentFor(app).delete(`/api/v1/students/${student.id}`).set(headers);
     expect(del.status).toBe(200);
 
@@ -82,8 +82,8 @@ describe('students CRUD', () => {
   });
 
   it('blocks TEACHER from creating students (RBAC, 403)', async () => {
-    const school = await createSchool();
-    const { user } = await createStaffUser({ email: 't@s.test', password: 'Str0ng!Pass99', schoolId: school.id, role: 'TEACHER' });
+    const tenant = await createTenant();
+    const { user } = await createStaffUser({ email: 't@s.test', password: 'Str0ng!Pass99', tenantId: tenant.id, role: 'TEACHER' });
     const res = await agentFor(app)
       .post('/api/v1/students')
       .set(authHeader(user))
@@ -92,12 +92,12 @@ describe('students CRUD', () => {
   });
 
   it('hides sensitive fields (DOB, medical notes) from non-admin roles', async () => {
-    const school = await createSchool();
-    const student = await createStudentRow({ schoolId: school.id });
+    const tenant = await createTenant();
+    const student = await createStudentRow({ tenantId: tenant.id });
     await prisma.student.update({ where: { id: student.id }, data: { medicalNotes: 'Allergic to peanuts' } });
     // Link a parent to this student.
-    const parentUser = await createUser({ email: 'parent@s.test', password: 'Str0ng!Pass99', role: 'PARENT', schoolId: school.id });
-    await prisma.parent.create({ data: { userId: parentUser.id, studentId: student.id, relationship: 'Mother', phone: '123', isPrimary: true } });
+    const parentUser = await createUser({ email: 'parent@s.test', password: 'Str0ng!Pass99', role: 'PARENT', tenantId: tenant.id });
+    await prisma.parent.create({ data: { tenantId: tenant.id, userId: parentUser.id, studentId: student.id, relationship: 'Mother', phone: '123', isPrimary: true } });
 
     const res = await agentFor(app).get(`/api/v1/students/${student.id}`).set(authHeader(parentUser));
     expect(res.status).toBe(200);
@@ -106,11 +106,11 @@ describe('students CRUD', () => {
   });
 
   it('prevents a parent from accessing another child (row-level security, 403)', async () => {
-    const school = await createSchool();
-    const mine = await createStudentRow({ schoolId: school.id });
-    const other = await createStudentRow({ schoolId: school.id, studentNumber: 'OTHER-1' });
-    const parentUser = await createUser({ email: 'p2@s.test', password: 'Str0ng!Pass99', role: 'PARENT', schoolId: school.id });
-    await prisma.parent.create({ data: { userId: parentUser.id, studentId: mine.id, relationship: 'Father', phone: '1', isPrimary: true } });
+    const tenant = await createTenant();
+    const mine = await createStudentRow({ tenantId: tenant.id });
+    const other = await createStudentRow({ tenantId: tenant.id, studentNumber: 'OTHER-1' });
+    const parentUser = await createUser({ email: 'p2@s.test', password: 'Str0ng!Pass99', role: 'PARENT', tenantId: tenant.id });
+    await prisma.parent.create({ data: { tenantId: tenant.id, userId: parentUser.id, studentId: mine.id, relationship: 'Father', phone: '1', isPrimary: true } });
 
     const ok = await agentFor(app).get(`/api/v1/students/${mine.id}`).set(authHeader(parentUser));
     expect(ok.status).toBe(200);
@@ -119,8 +119,8 @@ describe('students CRUD', () => {
   });
 
   it('imports students from CSV', async () => {
-    const { school, headers } = await adminCtx();
-    void school;
+    const { tenant, headers } = await adminCtx();
+    void tenant;
     const csv = [
       'studentNumber,firstName,lastName,dob,gender,admissionDate',
       'I-1,Grace,Hopper,2013-12-09,FEMALE,2026-01-10',

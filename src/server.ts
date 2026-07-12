@@ -55,6 +55,4 @@ bootstrap().catch((err) => {
   logger.error({ err }, 'Failed to start server');
   process.exit(1);
 });
-app.get('/health', (req, res) => {
-  res.status(200).json({ status: 'ok' });
-});
+

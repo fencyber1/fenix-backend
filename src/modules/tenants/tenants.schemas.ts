@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-export const updateSchoolSchema = z.object({
+export const updateTenantSchema = z.object({
   name: z.string().trim().min(1).max(160).optional(),
   logoUrl: z.string().url().max(500).nullable().optional(),
   address: z.string().trim().max(300).nullable().optional(),
@@ -26,5 +26,5 @@ export const notificationPrefSchema = z.object({
     .max(50),
 });
 
-export type UpdateSchoolInput = z.infer<typeof updateSchoolSchema>;
+export type UpdateTenantInput = z.infer<typeof updateTenantSchema>;
 export type NotificationPrefInput = z.infer<typeof notificationPrefSchema>;

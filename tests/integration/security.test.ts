@@ -3,7 +3,7 @@ import type { Application } from 'express';
 import { createApp } from '@/app';
 import { prisma } from '@/lib/prisma';
 import { resetDb } from '../helpers/db';
-import { createSchool, createUser } from '../helpers/factories';
+import { createTenant, createUser } from '../helpers/factories';
 import { agentFor, authHeader, originHeader } from '../helpers/request';
 
 let app: Application;
@@ -28,8 +28,8 @@ describe('security guarantees', () => {
   });
 
   it('never returns password hashes in any response', async () => {
-    const school = await createSchool();
-    const admin = await createUser({ email: 'admin@s.test', password: 'Str0ng!Pass99', role: 'ADMIN', schoolId: school.id });
+    const tenant = await createTenant();
+    const admin = await createUser({ email: 'admin@s.test', password: 'Str0ng!Pass99', role: 'ADMIN', tenantId: tenant.id });
     const me = await agentFor(app).get('/api/v1/auth/me').set(authHeader(admin));
     expect(me.status).toBe(200);
     expect(JSON.stringify(me.body)).not.toContain('passwordHash');
@@ -44,15 +44,15 @@ describe('security guarantees', () => {
   });
 
   it('enforces role guard server-side on audit logs (PARENT -> 403)', async () => {
-    const school = await createSchool();
-    const parent = await createUser({ email: 'p@s.test', password: 'Str0ng!Pass99', role: 'PARENT', schoolId: school.id });
+    const tenant = await createTenant();
+    const parent = await createUser({ email: 'p@s.test', password: 'Str0ng!Pass99', role: 'PARENT', tenantId: tenant.id });
     const res = await agentFor(app).get('/api/v1/audit-logs').set(authHeader(parent));
     expect(res.status).toBe(403);
   });
 
   it('treats invalid UUID path params as validation errors (422)', async () => {
-    const school = await createSchool();
-    const admin = await createUser({ email: 'admin@s.test', password: 'Str0ng!Pass99', role: 'ADMIN', schoolId: school.id });
+    const tenant = await createTenant();
+    const admin = await createUser({ email: 'admin@s.test', password: 'Str0ng!Pass99', role: 'ADMIN', tenantId: tenant.id });
     const res = await agentFor(app).get('/api/v1/students/not-a-uuid').set(authHeader(admin));
     expect(res.status).toBe(422);
   });

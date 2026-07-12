@@ -16,13 +16,13 @@ export function agentFor(app: Application) {
 export function authHeader(user: {
   id: string;
   role: Role;
-  schoolId: string | null;
+  tenantId: string | null;
   email: string;
 }): { Authorization: string; Origin: string } {
   const token = signAccessToken({
     sub: user.id,
     role: user.role,
-    schoolId: user.schoolId,
+    tenantId: user.tenantId ?? '',
     email: user.email,
   });
   return { Authorization: `Bearer ${token}`, Origin: ORIGIN };

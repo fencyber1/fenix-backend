@@ -4,7 +4,7 @@ import { createApp } from '@/app';
 import { prisma } from '@/lib/prisma';
 import { LocalStorageAdapter } from '@/adapters/storage';
 import { resetDb } from '../helpers/db';
-import { createSchool, createStudentRow, createUser } from '../helpers/factories';
+import { createTenant, createStudentRow, createUser } from '../helpers/factories';
 import { agentFor, authHeader } from '../helpers/request';
 
 let app: Application;
@@ -39,9 +39,9 @@ describe('LocalStorageAdapter', () => {
   });
 
   it('round-trips a presigned upload end-to-end through the HTTP route', async () => {
-    const school = await createSchool();
-    const admin = await createUser({ email: 'admin@s.test', password: 'Str0ng!Pass99', role: 'ADMIN', schoolId: school.id });
-    const student = await createStudentRow({ schoolId: school.id });
+    const tenant = await createTenant();
+    const admin = await createUser({ email: 'admin@s.test', password: 'Str0ng!Pass99', role: 'ADMIN', tenantId: tenant.id });
+    const student = await createStudentRow({ tenantId: tenant.id });
     const headers = authHeader(admin);
 
     const presign = await agentFor(app)

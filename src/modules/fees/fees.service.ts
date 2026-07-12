@@ -24,9 +24,9 @@ function dateOnly(value: string): Date {
   return new Date(`${value}T00:00:00.000Z`);
 }
 
-function requireSchool(auth: AuthContext): string {
-  if (!auth.schoolId) throw new ForbiddenError('User is not associated with a school');
-  return auth.schoolId;
+function requireTenant(auth: AuthContext): string {
+  if (!auth.tenantId) throw new ForbiddenError('User is not associated with a tenant');
+  return auth.tenantId;
 }
 
 function isAdmin(auth: AuthContext): boolean {
@@ -38,10 +38,10 @@ export async function createFeeStructure(
   input: CreateFeeStructureInput,
   ctx: AuditContext,
 ): Promise<unknown> {
-  const schoolId = requireSchool(auth);
+  const tenantId = requireTenant(auth);
   const structure = await prisma.feeStructure.create({
     data: {
-      schoolId,
+      tenantId,
       name: input.name,
       amount: new Prisma.Decimal(input.amount),
       frequency: input.frequency,
@@ -59,9 +59,9 @@ export async function createFeeStructure(
 }
 
 export async function listFeeStructures(auth: AuthContext): Promise<unknown[]> {
-  const schoolId = requireSchool(auth);
+  const tenantId = requireTenant(auth);
   return prisma.feeStructure.findMany({
-    where: { schoolId, deletedAt: null },
+    where: { tenantId, deletedAt: null },
     orderBy: { createdAt: 'desc' },
   });
 }
@@ -71,13 +71,13 @@ export async function createInvoice(
   input: CreateInvoiceInput,
   ctx: AuditContext,
 ): Promise<unknown> {
-  const schoolId = requireSchool(auth);
+  const tenantId = requireTenant(auth);
   await assertCanAccessStudent(auth, input.studentId);
 
   const structure = await prisma.feeStructure.findFirst({
-    where: { id: input.feeStructureId, schoolId, deletedAt: null },
+    where: { id: input.feeStructureId, tenantId, deletedAt: null },
   });
-  if (!structure) throw new BadRequestError('Fee structure not found in your school');
+  if (!structure) throw new BadRequestError('Fee structure not found in your tenant');
 
   const amount = new Prisma.Decimal(input.amount ?? structure.amount.toNumber());
   const dueDate = dateOnly(input.dueDate);
@@ -85,6 +85,7 @@ export async function createInvoice(
   const invoice = await prisma.$transaction(async (tx) => {
     const created = await tx.feeInvoice.create({
       data: {
+        tenantId,
         studentId: input.studentId,
         feeStructureId: input.feeStructureId,
         dueDate,
@@ -169,7 +170,7 @@ export async function getInvoice(auth: AuthContext, id: string): Promise<unknown
           firstName: true,
           lastName: true,
           studentNumber: true,
-          school: { select: { name: true, logoUrl: true, address: true } },
+          tenant: { select: { name: true, logoUrl: true, address: true } },
         },
       },
     },
@@ -203,6 +204,7 @@ export async function recordPayment(
 
     const payment = await tx.payment.create({
       data: {
+        tenantId: requireTenant(auth),
         invoiceId: invoice.id,
         amountPaid: new Prisma.Decimal(input.amountPaid),
         paymentDate: dateOnly(input.paymentDate),
@@ -344,6 +346,7 @@ export async function processOverdueAndRemind(now = new Date()): Promise<{ marke
     include: {
       student: {
         select: {
+          tenantId: true,
           firstName: true,
           lastName: true,
           parents: { select: { phone: true, user: { select: { id: true, email: true } } } },
@@ -360,6 +363,7 @@ export async function processOverdueAndRemind(now = new Date()): Promise<{ marke
     const balance = balanceDue(inv.amount.toNumber(), inv.amountPaid.toNumber());
     for (const parent of inv.student.parents) {
       await queue.enqueueNotification({
+        tenantId: inv.student.tenantId,
         userId: parent.user.id,
         type: NotificationType.FEE_REMINDER,
         title: 'Fee reminder',

@@ -18,12 +18,12 @@ import type {
 async function assertCanGradeSubject(auth: AuthContext, subjectId: string): Promise<void> {
   const subject = await prisma.subject.findFirst({
     where: { id: subjectId },
-    select: { id: true, classId: true, teacherId: true, class: { select: { schoolId: true } } },
+    select: { id: true, classId: true, teacherId: true, class: { select: { tenantId: true } } },
   });
   if (!subject) throw new NotFoundError('Subject');
   if (auth.role === 'SUPER_ADMIN') return;
   if (auth.role === 'ADMIN') {
-    if (subject.class.schoolId !== auth.schoolId) throw new ForbiddenError('Subject outside your school');
+    if (subject.class.tenantId !== auth.tenantId) throw new ForbiddenError('Subject outside your tenant');
     return;
   }
   if (auth.role === 'TEACHER') {
@@ -67,6 +67,7 @@ export async function upsertGrade(
         },
       },
       create: {
+        tenantId: auth.tenantId!,
         studentId: input.studentId,
         subjectId: input.subjectId,
         term: input.term,
@@ -164,7 +165,7 @@ export async function listGrades(
 export interface ReportCardData {
   student: { id: string; name: string; studentNumber: string };
   term: string;
-  school: { name: string; logoUrl: string | null };
+  tenant: { name: string; logoUrl: string | null };
   subjects: {
     subject: string;
     code: string;
@@ -191,7 +192,7 @@ export async function getReportCardData(
       firstName: true,
       lastName: true,
       studentNumber: true,
-      school: { select: { name: true, logoUrl: true } },
+      tenant: { select: { name: true, logoUrl: true } },
     },
   });
   if (!student) throw new NotFoundError('Student');
@@ -226,7 +227,7 @@ export async function getReportCardData(
   return {
     student: { id: student.id, name: `${student.firstName} ${student.lastName}`, studentNumber: student.studentNumber },
     term: query.term,
-    school: { name: student.school.name, logoUrl: student.school.logoUrl },
+    tenant: { name: student.tenant.name, logoUrl: student.tenant.logoUrl },
     subjects,
     summary: { average, gpa: gpa(percentages), totalSubjects: subjects.length },
   };

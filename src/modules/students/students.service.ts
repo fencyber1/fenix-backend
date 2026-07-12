@@ -39,9 +39,9 @@ function toDateString(d: Date): string {
   return d.toISOString().slice(0, 10);
 }
 
-function requireSchool(auth: AuthContext): string {
-  if (!auth.schoolId) throw new ForbiddenError('User is not associated with a school');
-  return auth.schoolId;
+function requireTenant(auth: AuthContext): string {
+  if (!auth.tenantId) throw new ForbiddenError('User is not associated with a tenant');
+  return auth.tenantId;
 }
 
 export async function listStudents(
@@ -93,20 +93,20 @@ export async function createStudent(
   input: CreateStudentInput,
   ctx: AuditContext,
 ): Promise<StudentDto> {
-  const schoolId = requireSchool(auth);
+  const tenantId = requireTenant(auth);
 
   const created = await prisma.$transaction(async (tx) => {
     if (input.classId) {
       const klass = await tx.class.findFirst({
-        where: { id: input.classId, schoolId, deletedAt: null },
+        where: { id: input.classId, tenantId, deletedAt: null },
         select: { id: true, academicYear: true },
       });
-      if (!klass) throw new BadRequestError('Class not found in your school');
+      if (!klass) throw new BadRequestError('Class not found in your tenant');
     }
 
     const student = await tx.student.create({
       data: {
-        schoolId,
+        tenantId,
         studentNumber: input.studentNumber,
         firstName: input.firstName,
         lastName: input.lastName,
@@ -128,6 +128,7 @@ export async function createStudent(
       });
       await tx.enrollment.create({
         data: {
+          tenantId,
           studentId: student.id,
           classId: input.classId,
           academicYear: input.academicYear ?? klass.academicYear,
@@ -234,7 +235,7 @@ export async function importStudents(
   input: ImportStudentsInput,
   ctx: AuditContext,
 ): Promise<ImportResult> {
-  const schoolId = requireSchool(auth);
+  const tenantId = requireTenant(auth);
 
   let records: Record<string, string>[];
   try {
@@ -278,7 +279,7 @@ export async function importStudents(
     }
 
     const exists = await prisma.student.findFirst({
-      where: { schoolId, studentNumber: row.studentNumber },
+      where: { tenantId, studentNumber: row.studentNumber },
       select: { id: true },
     });
     if (exists) {
@@ -289,7 +290,7 @@ export async function importStudents(
     try {
       const student = await prisma.student.create({
         data: {
-          schoolId,
+          tenantId,
           studentNumber: row.studentNumber,
           firstName: row.firstName,
           lastName: row.lastName,
@@ -301,12 +302,13 @@ export async function importStudents(
       });
       if (input.classId) {
         const klass = await prisma.class.findFirst({
-          where: { id: input.classId, schoolId, deletedAt: null },
+          where: { id: input.classId, tenantId, deletedAt: null },
           select: { academicYear: true },
         });
         if (klass) {
           await prisma.enrollment.create({
             data: {
+              tenantId,
               studentId: student.id,
               classId: input.classId,
               academicYear: input.academicYear ?? klass.academicYear,

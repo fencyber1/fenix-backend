@@ -3,7 +3,7 @@ import type { Application } from 'express';
 import { createApp } from '@/app';
 import { prisma } from '@/lib/prisma';
 import { resetDb } from '../helpers/db';
-import { createSchool, createUser } from '../helpers/factories';
+import { createTenant, createUser } from '../helpers/factories';
 import { agentFor, originHeader } from '../helpers/request';
 
 let app: Application;
@@ -22,8 +22,8 @@ afterAll(async () => {
 
 describe('POST /api/v1/auth/login', () => {
   it('logs in a verified user and returns an access token + refresh cookie', async () => {
-    const school = await createSchool();
-    await createUser({ email: 'admin@school.test', password: 'Str0ng!Pass99', role: 'ADMIN', schoolId: school.id });
+    const tenant = await createTenant();
+    await createUser({ email: 'admin@school.test', password: 'Str0ng!Pass99', role: 'ADMIN', tenantId: tenant.id });
 
     const res = await agentFor(app)
       .post('/api/v1/auth/login')
@@ -41,8 +41,8 @@ describe('POST /api/v1/auth/login', () => {
   });
 
   it('rejects wrong password with 401 and no token', async () => {
-    const school = await createSchool();
-    await createUser({ email: 'admin@school.test', password: 'Str0ng!Pass99', role: 'ADMIN', schoolId: school.id });
+    const tenant = await createTenant();
+    await createUser({ email: 'admin@school.test', password: 'Str0ng!Pass99', role: 'ADMIN', tenantId: tenant.id });
     const res = await agentFor(app)
       .post('/api/v1/auth/login')
       .set(originHeader)
@@ -52,8 +52,8 @@ describe('POST /api/v1/auth/login', () => {
   });
 
   it('rejects unverified users', async () => {
-    const school = await createSchool();
-    await createUser({ email: 'new@school.test', password: 'Str0ng!Pass99', role: 'ADMIN', schoolId: school.id, isVerified: false });
+    const tenant = await createTenant();
+    await createUser({ email: 'new@school.test', password: 'Str0ng!Pass99', role: 'ADMIN', tenantId: tenant.id, isVerified: false });
     const res = await agentFor(app)
       .post('/api/v1/auth/login')
       .set(originHeader)
@@ -69,8 +69,8 @@ describe('POST /api/v1/auth/login', () => {
   });
 
   it('writes a LOGIN audit log', async () => {
-    const school = await createSchool();
-    const user = await createUser({ email: 'a@s.test', password: 'Str0ng!Pass99', role: 'ADMIN', schoolId: school.id });
+    const tenant = await createTenant();
+    const user = await createUser({ email: 'a@s.test', password: 'Str0ng!Pass99', role: 'ADMIN', tenantId: tenant.id });
     await agentFor(app).post('/api/v1/auth/login').set(originHeader).send({ email: 'a@s.test', password: 'Str0ng!Pass99' });
     const log = await prisma.auditLog.findFirst({ where: { actorId: user.id, action: 'LOGIN' } });
     expect(log).not.toBeNull();
@@ -79,8 +79,8 @@ describe('POST /api/v1/auth/login', () => {
 
 describe('refresh + logout flow', () => {
   it('refreshes tokens then revokes them on logout', async () => {
-    const school = await createSchool();
-    await createUser({ email: 'a@s.test', password: 'Str0ng!Pass99', role: 'ADMIN', schoolId: school.id });
+    const tenant = await createTenant();
+    await createUser({ email: 'a@s.test', password: 'Str0ng!Pass99', role: 'ADMIN', tenantId: tenant.id });
 
     const agent = agentFor(app);
     const login = await agent.post('/api/v1/auth/login').set(originHeader).send({ email: 'a@s.test', password: 'Str0ng!Pass99' });
@@ -107,8 +107,8 @@ describe('forgot/reset password', () => {
   });
 
   it('resets password with a valid token and invalidates old sessions', async () => {
-    const school = await createSchool();
-    const user = await createUser({ email: 'reset@s.test', password: 'Old!Pass1234', role: 'ADMIN', schoolId: school.id });
+    const tenant = await createTenant();
+    const user = await createUser({ email: 'reset@s.test', password: 'Old!Pass1234', role: 'ADMIN', tenantId: tenant.id });
 
     await agentFor(app).post('/api/v1/auth/forgot-password').set(originHeader).send({ email: 'reset@s.test' });
     // The console email driver does not expose the token; read it from the DB (hashed token row exists).

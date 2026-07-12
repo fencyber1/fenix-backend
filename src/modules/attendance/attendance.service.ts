@@ -23,11 +23,11 @@ async function assertCanManageClass(auth: AuthContext, classId: string): Promise
   if (auth.role === 'SUPER_ADMIN') return;
   const klass = await prisma.class.findFirst({
     where: { id: classId, deletedAt: null },
-    select: { id: true, schoolId: true },
+    select: { id: true, tenantId: true },
   });
   if (!klass) throw new NotFoundError('Class');
   if (auth.role === 'ADMIN') {
-    if (klass.schoolId !== auth.schoolId) throw new ForbiddenError('Class is outside your school');
+    if (klass.tenantId !== auth.tenantId) throw new ForbiddenError('Class is outside your tenant');
     return;
   }
   if (auth.role === 'TEACHER') {
@@ -81,6 +81,7 @@ export async function bulkMark(
       const row = await tx.attendance.upsert({
         where: { studentId_date: { studentId: r.studentId, date } },
         create: {
+          tenantId: auth.tenantId!,
           studentId: r.studentId,
           classId: input.classId,
           date,
@@ -107,7 +108,7 @@ export async function bulkMark(
     }
   });
 
-  const alertsQueued = await queueAttendanceAlerts(alertStudentIds, input.date);
+  const alertsQueued = await queueAttendanceAlerts(alertStudentIds, input.date, auth.tenantId!);
 
   return {
     date: input.date,
@@ -121,6 +122,7 @@ export async function bulkMark(
 async function queueAttendanceAlerts(
   items: { studentId: string; status: AttendanceStatus }[],
   dateStr: string,
+  tenantId: string,
 ): Promise<number> {
   if (items.length === 0) return 0;
   const queue = getQueue();
@@ -151,6 +153,7 @@ async function queueAttendanceAlerts(
       );
       if (channels.length === 0) continue;
       await queue.enqueueNotification({
+        tenantId,
         userId: parent.user.id,
         type: NotificationType.ATTENDANCE_ALERT,
         title: 'Attendance alert',

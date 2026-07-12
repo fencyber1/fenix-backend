@@ -3,7 +3,7 @@ import type { Application } from 'express';
 import { createApp } from '@/app';
 import { prisma } from '@/lib/prisma';
 import { resetDb } from '../helpers/db';
-import { createClassRow, createSchool, createStaffUser, createStudentRow, createUser } from '../helpers/factories';
+import { createClassRow, createTenant, createStaffUser, createStudentRow, createUser } from '../helpers/factories';
 import { agentFor, authHeader } from '../helpers/request';
 
 let app: Application;
@@ -19,16 +19,16 @@ afterAll(async () => {
 
 describe('attendance flow', () => {
   it('bulk-marks attendance for enrolled students and reports stats', async () => {
-    const school = await createSchool();
-    const admin = await createUser({ email: 'admin@s.test', password: 'Str0ng!Pass99', role: 'ADMIN', schoolId: school.id });
+    const tenant = await createTenant();
+    const admin = await createUser({ email: 'admin@s.test', password: 'Str0ng!Pass99', role: 'ADMIN', tenantId: tenant.id });
     const headers = authHeader(admin);
-    const klass = await createClassRow({ schoolId: school.id });
-    const s1 = await createStudentRow({ schoolId: school.id, studentNumber: 'A1' });
-    const s2 = await createStudentRow({ schoolId: school.id, studentNumber: 'A2' });
+    const klass = await createClassRow({ tenantId: tenant.id });
+    const s1 = await createStudentRow({ tenantId: tenant.id, studentNumber: 'A1' });
+    const s2 = await createStudentRow({ tenantId: tenant.id, studentNumber: 'A2' });
     await prisma.enrollment.createMany({
       data: [
-        { studentId: s1.id, classId: klass.id, academicYear: '2026' },
-        { studentId: s2.id, classId: klass.id, academicYear: '2026' },
+        { tenantId: tenant.id, studentId: s1.id, classId: klass.id, academicYear: '2026' },
+        { tenantId: tenant.id, studentId: s2.id, classId: klass.id, academicYear: '2026' },
       ],
     });
 
@@ -65,10 +65,10 @@ describe('attendance flow', () => {
   });
 
   it('rejects marking a student not enrolled in the class (400)', async () => {
-    const school = await createSchool();
-    const admin = await createUser({ email: 'admin@s.test', password: 'Str0ng!Pass99', role: 'ADMIN', schoolId: school.id });
-    const klass = await createClassRow({ schoolId: school.id });
-    const stranger = await createStudentRow({ schoolId: school.id, studentNumber: 'Z9' });
+    const tenant = await createTenant();
+    const admin = await createUser({ email: 'admin@s.test', password: 'Str0ng!Pass99', role: 'ADMIN', tenantId: tenant.id });
+    const klass = await createClassRow({ tenantId: tenant.id });
+    const stranger = await createStudentRow({ tenantId: tenant.id, studentNumber: 'Z9' });
     const res = await agentFor(app)
       .post('/api/v1/attendance')
       .set(authHeader(admin))
@@ -77,11 +77,11 @@ describe('attendance flow', () => {
   });
 
   it('forbids a teacher from marking a class they do not teach (403)', async () => {
-    const school = await createSchool();
-    const { user: teacher } = await createStaffUser({ email: 't@s.test', password: 'Str0ng!Pass99', schoolId: school.id, role: 'TEACHER' });
-    const klass = await createClassRow({ schoolId: school.id }); // no teacher assigned
-    const s1 = await createStudentRow({ schoolId: school.id });
-    await prisma.enrollment.create({ data: { studentId: s1.id, classId: klass.id, academicYear: '2026' } });
+    const tenant = await createTenant();
+    const { user: teacher } = await createStaffUser({ email: 't@s.test', password: 'Str0ng!Pass99', tenantId: tenant.id, role: 'TEACHER' });
+    const klass = await createClassRow({ tenantId: tenant.id }); // no teacher assigned
+    const s1 = await createStudentRow({ tenantId: tenant.id });
+    await prisma.enrollment.create({ data: { tenantId: tenant.id, studentId: s1.id, classId: klass.id, academicYear: '2026' } });
 
     const res = await agentFor(app)
       .post('/api/v1/attendance')
@@ -91,13 +91,13 @@ describe('attendance flow', () => {
   });
 
   it('queues attendance alert notifications for absentees to parents', async () => {
-    const school = await createSchool();
-    const admin = await createUser({ email: 'admin@s.test', password: 'Str0ng!Pass99', role: 'ADMIN', schoolId: school.id });
-    const klass = await createClassRow({ schoolId: school.id });
-    const child = await createStudentRow({ schoolId: school.id });
-    await prisma.enrollment.create({ data: { studentId: child.id, classId: klass.id, academicYear: '2026' } });
-    const parentUser = await createUser({ email: 'parent@s.test', password: 'Str0ng!Pass99', role: 'PARENT', schoolId: school.id });
-    await prisma.parent.create({ data: { userId: parentUser.id, studentId: child.id, relationship: 'Mother', phone: '+10000000', isPrimary: true } });
+    const tenant = await createTenant();
+    const admin = await createUser({ email: 'admin@s.test', password: 'Str0ng!Pass99', role: 'ADMIN', tenantId: tenant.id });
+    const klass = await createClassRow({ tenantId: tenant.id });
+    const child = await createStudentRow({ tenantId: tenant.id });
+    await prisma.enrollment.create({ data: { tenantId: tenant.id, studentId: child.id, classId: klass.id, academicYear: '2026' } });
+    const parentUser = await createUser({ email: 'parent@s.test', password: 'Str0ng!Pass99', role: 'PARENT', tenantId: tenant.id });
+    await prisma.parent.create({ data: { tenantId: tenant.id, userId: parentUser.id, studentId: child.id, relationship: 'Mother', phone: '+10000000', isPrimary: true } });
 
     await agentFor(app)
       .post('/api/v1/attendance')

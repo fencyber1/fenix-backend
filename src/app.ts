@@ -111,8 +111,8 @@ export function createApp(): Application {
   app.use(env.API_PREFIX, csrfGuard, globalRateLimiter, buildApiRouter());
 
   // SPA fallback — serve the built frontend and let React Router handle routing.
-  // In production the frontend is built into ../frontend/dist relative to backend root.
-  const spaDist = path.resolve(__dirname, '../../frontend/dist');
+  // process.cwd() is always the backend root regardless of how TS is executed.
+  const spaDist = path.resolve(process.cwd(), '../frontend/dist');
   if (fs.existsSync(spaDist)) {
     app.use(express.static(spaDist));
     app.get('*', (_req: Request, res: Response) => {

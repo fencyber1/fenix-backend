@@ -8,7 +8,7 @@ async function main(): Promise<void> {
   const saltRounds = 12;
   const adminEmail = 'fenyiemmanuel3@gmail.com';
   const adminPassword = 'Dream3@Big';
-  const tenantName = 'Fenix Academy';
+  const tenantName = 'FenDux Academy';
 
   console.log('Clearing all data...');
   const tables = [

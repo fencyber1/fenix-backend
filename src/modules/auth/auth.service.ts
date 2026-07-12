@@ -120,9 +120,9 @@ export async function register(input: RegisterInput, meta: RequestMeta): Promise
   const link = `${env.APP_PUBLIC_URL}/verify-email?token=${rawToken}`;
   await getEmail().send({
     to: result.user.email,
-    subject: 'Verify your Fenix account',
-    html: `<p>Welcome to Fenix! Your school <strong>${result.tenant.name}</strong> has been created.</p><p><a href="${link}">Verify your email</a> to activate your account.</p>`,
-    text: `Welcome to Fenix! Verify your email: ${link}`,
+    subject: 'Verify your FenDux account',
+    html: `<p>Welcome to FenDux! Your school <strong>${result.tenant.name}</strong> has been created.</p><p><a href="${link}">Verify your email</a> to activate your account.</p>`,
+    text: `Welcome to FenDux! Verify your email: ${link}`,
   });
 
   // 7. Update last login

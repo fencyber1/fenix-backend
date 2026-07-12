@@ -158,7 +158,9 @@ export async function login(input: LoginInput, meta: RequestMeta): Promise<Login
   if (!user.isVerified) throw new UnauthorizedError('Please verify your email before logging in');
 
   // ── Validate role-specific IDs ──
-  if (input.role === 'TEACHER') {
+  if (input.role === 'ADMIN') {
+    // Admins authenticate by email + password only — no schoolId needed.
+  } else if (input.role === 'TEACHER') {
     if (!input.schoolId) throw new BadRequestError('School ID is required for teacher login');
     const tenant = await prisma.tenant.findFirst({
       where: { id: user.tenantId, deletedAt: null },

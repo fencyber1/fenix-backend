@@ -3,6 +3,8 @@ import helmet from 'helmet';
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
 import pinoHttp from 'pino-http';
+import path from 'node:path';
+import fs from 'node:fs';
 import { env, isProd } from '@/config/env';
 import { logger } from '@/lib/logger';
 import { requestContext } from '@/middleware/requestContext';
@@ -107,6 +109,16 @@ export function createApp(): Application {
 
   // CSRF protection + global rate limiting on the API surface.
   app.use(env.API_PREFIX, csrfGuard, globalRateLimiter, buildApiRouter());
+
+  // SPA fallback — serve the built frontend and let React Router handle routing.
+  // In production the frontend is built into ../frontend/dist relative to backend root.
+  const spaDist = path.resolve(__dirname, '../../frontend/dist');
+  if (fs.existsSync(spaDist)) {
+    app.use(express.static(spaDist));
+    app.get('*', (_req: Request, res: Response) => {
+      res.sendFile(path.join(spaDist, 'index.html'));
+    });
+  }
 
   // 404 + error handling.
   app.use(notFoundHandler);

@@ -179,7 +179,6 @@ export async function getStudentDashboard(auth: AuthContext): Promise<StudentDas
       user: { select: { email: true } },
       enrollments: {
         include: { class: true },
-        where: { class: { academicYear: '2025' } },
         orderBy: { enrolledAt: 'desc' },
         take: 1,
       },
@@ -360,7 +359,6 @@ export async function getParentDashboard(auth: AuthContext): Promise<ParentDashb
         include: {
           enrollments: {
             include: { class: true },
-            where: { class: { academicYear: '2025' } },
             orderBy: { enrolledAt: 'desc' },
             take: 1,
           },

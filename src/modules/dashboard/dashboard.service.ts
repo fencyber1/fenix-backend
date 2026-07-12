@@ -330,9 +330,22 @@ export interface ParentDashboardData {
     name: string;
     studentNumber: string;
     className: string;
+    classId: string | null;
     attendanceToday: string;
     averageGrade: number;
     pendingFees: number;
+    subjects: {
+      name: string;
+      code: string;
+      teacherName: string;
+    }[];
+    recentGrades: {
+      subject: string;
+      score: string;
+      maxScore: string;
+      gradeLetter: string;
+      term: string;
+    }[];
   }[];
   overallPendingFees: number;
 }
@@ -362,8 +375,11 @@ export async function getParentDashboard(auth: AuthContext): Promise<ParentDashb
 
   const today = startOfDayUtc();
   const studentIds = parentLinks.map((p) => p.student.id);
+  const classIds = parentLinks
+    .map((pl) => pl.student.enrollments[0]?.classId)
+    .filter((id): id is string => !!id);
 
-  const [attendances, allGrades, allInvoices] = await Promise.all([
+  const [attendances, allGrades, allInvoices, allSubjects, allRecentGrades] = await Promise.all([
     prisma.attendance.findMany({
       where: { studentId: { in: studentIds }, date: today },
       select: { studentId: true, status: true },
@@ -380,6 +396,18 @@ export async function getParentDashboard(auth: AuthContext): Promise<ParentDashb
       },
       select: { studentId: true, amount: true, amountPaid: true, status: true },
     }),
+    classIds.length > 0
+      ? prisma.subject.findMany({
+          where: { classId: { in: classIds } },
+          include: { teacher: { select: { firstName: true, lastName: true } } },
+        })
+      : Promise.resolve([]),
+    prisma.grade.findMany({
+      where: { studentId: { in: studentIds } },
+      include: { subject: { select: { name: true } } },
+      orderBy: { recordedAt: 'desc' },
+      take: 50,
+    }),
   ]);
 
   const attendanceMap = new Map(attendances.map((a) => [a.studentId, a.status]));
@@ -390,24 +418,60 @@ export async function getParentDashboard(auth: AuthContext): Promise<ParentDashb
     invoiceMap.set(inv.studentId, prev + balanceDue(inv.amount.toNumber(), inv.amountPaid.toNumber()));
   }
 
+  // Group subjects by classId
+  const subjectsByClass = new Map<string, typeof allSubjects>();
+  for (const sub of allSubjects) {
+    const list = subjectsByClass.get(sub.classId) ?? [];
+    list.push(sub);
+    subjectsByClass.set(sub.classId, list);
+  }
+
+  // Group recent grades by studentId
+  const gradesByStudent = new Map<string, typeof allRecentGrades>();
+  for (const g of allRecentGrades) {
+    const list = gradesByStudent.get(g.studentId) ?? [];
+    list.push(g);
+    gradesByStudent.set(g.studentId, list);
+  }
+
   let overallPendingFees = 0;
   const children = parentLinks.map((pl) => {
     const s = pl.student;
     const classInfo = s.enrollments[0]?.class;
+    const classId = s.enrollments[0]?.classId ?? null;
     const className = classInfo ? `${classInfo.name} ${classInfo.section}` : '—';
     const g = gradeMap.get(s.id);
     const avgGrade = g?._avg.score && g?._avg.maxScore ? Math.round((g._avg.score.toNumber() / g._avg.maxScore.toNumber()) * 10000) / 100 : 0;
     const fees = invoiceMap.get(s.id) ?? 0;
     overallPendingFees += fees;
 
+    const classSubjects = classId ? (subjectsByClass.get(classId) ?? []) : [];
+    const subjects = classSubjects.map((sub) => ({
+      name: sub.name,
+      code: sub.code,
+      teacherName: sub.teacher ? `${sub.teacher.firstName} ${sub.teacher.lastName}` : '—',
+    }));
+
+    const studentGrades = (gradesByStudent.get(s.id) ?? []).slice(0, 5);
+    const recentGrades = studentGrades.map((gr) => ({
+      subject: gr.subject.name,
+      score: gr.score.toString(),
+      maxScore: gr.maxScore.toString(),
+      gradeLetter: gr.gradeLetter,
+      term: gr.term,
+    }));
+
     return {
       id: s.id,
       name: `${s.firstName} ${s.lastName}`,
       studentNumber: s.studentNumber,
       className,
+      classId,
       attendanceToday: attendanceMap.get(s.id) ?? '—',
       averageGrade: avgGrade,
       pendingFees: Math.round(fees * 100) / 100,
+      subjects,
+      recentGrades,
     };
   });
 

@@ -157,6 +157,54 @@ export async function login(input: LoginInput, meta: RequestMeta): Promise<Login
   if (!user.isActive) throw new UnauthorizedError('Account is disabled');
   if (!user.isVerified) throw new UnauthorizedError('Please verify your email before logging in');
 
+  // ── Validate role-specific IDs ──
+  if (input.role === 'TEACHER') {
+    if (!input.schoolId) throw new BadRequestError('School ID is required for teacher login');
+    const tenant = await prisma.tenant.findFirst({
+      where: { id: user.tenantId, deletedAt: null },
+      select: { displayId: true },
+    });
+    if (!tenant || tenant.displayId !== input.schoolId) {
+      throw new BadRequestError('Invalid school ID');
+    }
+  } else if (input.role === 'STUDENT') {
+    if (!input.schoolId) throw new BadRequestError('School ID is required for student login');
+    const tenant = await prisma.tenant.findFirst({
+      where: { id: user.tenantId, deletedAt: null },
+      select: { displayId: true },
+    });
+    if (!tenant || tenant.displayId !== input.schoolId) {
+      throw new BadRequestError('Invalid school ID');
+    }
+    if (input.classId) {
+      const student = await prisma.student.findFirst({ where: { userId: user.id, deletedAt: null } });
+      if (student) {
+        const enrollment = await prisma.enrollment.findFirst({
+          where: { studentId: student.id, class: { displayId: input.classId } },
+        });
+        if (!enrollment) throw new BadRequestError('You are not enrolled in this class');
+      }
+    }
+  } else if (input.role === 'PARENT') {
+    if (!input.schoolId) throw new BadRequestError('School ID is required for parent login');
+    const tenant = await prisma.tenant.findFirst({
+      where: { id: user.tenantId, deletedAt: null },
+      select: { displayId: true },
+    });
+    if (!tenant || tenant.displayId !== input.schoolId) {
+      throw new BadRequestError('Invalid school ID');
+    }
+    if (input.studentId) {
+      const parentLink = await prisma.parent.findFirst({ where: { userId: user.id } });
+      if (parentLink) {
+        const student = await prisma.student.findFirst({
+          where: { id: parentLink.studentId, displayId: input.studentId, deletedAt: null },
+        });
+        if (!student) throw new BadRequestError('Student ID does not match your linked child');
+      }
+    }
+  }
+
   const tokens = await issueTokens(
     { sub: user.id, role: user.role, tenantId: user.tenantId, email: user.email },
     meta,

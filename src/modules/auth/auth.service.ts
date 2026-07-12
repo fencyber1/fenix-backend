@@ -86,7 +86,7 @@ export async function register(input: RegisterInput, meta: RequestMeta): Promise
       data: {
         tenantId: tenant.id,
         userId: user.id,
-        employeeNumber: `ADM-${Date.now()}`,
+        employeeNumber: `ADM-${crypto.randomUUID().slice(0, 8).toUpperCase()}`,
         firstName: input.firstName,
         lastName: input.lastName,
         role: 'ADMIN',
@@ -157,8 +157,23 @@ export async function login(input: LoginInput, meta: RequestMeta): Promise<Login
   if (!user.isActive) throw new UnauthorizedError('Account is disabled');
   if (!user.isVerified) throw new UnauthorizedError('Please verify your email before logging in');
 
+  // Account lockout after 10 consecutive failed attempts
+  if ((user.failedLoginCount ?? 0) >= 10) {
+    throw new UnauthorizedError('Account is locked due to too many failed login attempts. Please reset your password.');
+  }
+
+  // Reset failed login count on successful authentication
+  if ((user.failedLoginCount ?? 0) > 0) {
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { failedLoginCount: 0 },
+    });
+  }
+
   // ── Validate role-specific IDs ──
-  if (input.role === 'ADMIN') {
+  if (input.role === 'SUPER_ADMIN') {
+    // Super admins authenticate by email + password only — no schoolId needed.
+  } else if (input.role === 'ADMIN') {
     // Admins authenticate by email + password only — no schoolId needed.
   } else if (input.role === 'TEACHER') {
     if (!input.schoolId) throw new BadRequestError('School ID is required for teacher login');

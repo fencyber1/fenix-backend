@@ -35,7 +35,7 @@ export function csrfGuard(req: Request, _res: Response, next: NextFunction): voi
   }
 
   const candidate = origin ?? referer ?? '';
-  const allowed = env.CORS_ORIGINS.some((o) => candidate === o || candidate.startsWith(`${o}/`));
+  const allowed = env.CORS_ORIGINS.some((o) => candidate === o || candidate === `${o}/`);
   if (!allowed) {
     next(new ForbiddenError('Cross-site request blocked'));
     return;

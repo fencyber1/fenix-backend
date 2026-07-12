@@ -159,8 +159,9 @@ export async function listInvoices(
 }
 
 export async function getInvoice(auth: AuthContext, id: string): Promise<unknown> {
-  const invoice = await prisma.feeInvoice.findUnique({
-    where: { id },
+  const studentScope = await studentScopeWhere(auth);
+  const invoice = await prisma.feeInvoice.findFirst({
+    where: { id, student: { ...studentScope, deletedAt: null } },
     include: {
       feeStructure: true,
       payments: { orderBy: { paymentDate: 'desc' } },
@@ -176,7 +177,6 @@ export async function getInvoice(auth: AuthContext, id: string): Promise<unknown
     },
   });
   if (!invoice) throw new NotFoundError('Invoice');
-  await assertCanAccessStudent(auth, invoice.studentId);
   return { ...invoice, balance: balanceDue(invoice.amount.toNumber(), invoice.amountPaid.toNumber()) };
 }
 
@@ -189,8 +189,12 @@ export async function recordPayment(
   if (!isAdmin(auth)) throw new ForbiddenError('Only administrators can record payments');
 
   return prisma.$transaction(async (tx) => {
-    const invoice = await tx.feeInvoice.findUnique({ where: { id: input.invoiceId } });
+    const invoice = await tx.feeInvoice.findUnique({
+      where: { id: input.invoiceId },
+      include: { student: { select: { tenantId: true } } },
+    });
     if (!invoice) throw new NotFoundError('Invoice');
+    await assertCanAccessStudent(auth, invoice.studentId);
     if (invoice.status === InvoiceStatus.WAIVED) {
       throw new BadRequestError('Cannot record a payment against a waived invoice');
     }
@@ -253,8 +257,12 @@ export async function waiveInvoice(
   if (!isAdmin(auth)) throw new ForbiddenError('Only administrators can waive invoices');
 
   return prisma.$transaction(async (tx) => {
-    const before = await tx.feeInvoice.findUnique({ where: { id } });
+    const before = await tx.feeInvoice.findUnique({
+      where: { id },
+      include: { student: { select: { tenantId: true } } },
+    });
     if (!before) throw new NotFoundError('Invoice');
+    await assertCanAccessStudent(auth, before.studentId);
     if (before.status === InvoiceStatus.PAID) throw new BadRequestError('Invoice is already fully paid');
 
     const updated = await tx.feeInvoice.update({

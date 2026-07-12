@@ -85,11 +85,10 @@ function mapPrismaError(err: Prisma.PrismaClientKnownRequestError): {
   switch (err.code) {
     case 'P2002': {
       const target = (err.meta?.target as string[] | undefined) ?? [];
-      const field = target.join(', ') || 'field';
       return {
         status: 409,
-        message: `A record with this ${field} already exists`,
-        errors: target.map((t) => ({ field: t, message: 'Must be unique' })),
+        message: 'A record with this value already exists',
+        errors: target.map(() => ({ field: 'value', message: 'Must be unique' })),
         code: 'UNIQUE_CONSTRAINT',
       };
     }

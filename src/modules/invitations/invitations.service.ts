@@ -124,7 +124,6 @@ export async function validateToken(rawToken: string): Promise<{
     role: record.role,
     email: record.email,
     name: record.name,
-    schoolName: record.tenant.name,
     roleData: (record.roleData as Record<string, unknown>) ?? {},
   };
 }

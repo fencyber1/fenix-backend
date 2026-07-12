@@ -16,7 +16,7 @@ import {
   revokeRefreshToken,
   type IssuedTokens,
 } from './token.service';
-import type { LoginInput } from './auth.schemas';
+import type { LoginInput, RegisterInput } from './auth.schemas';
 
 interface RequestMeta {
   userAgent?: string | null;
@@ -43,6 +43,95 @@ function toPublicUser(user: User): PublicUser {
 
 export interface LoginResult extends IssuedTokens {
   user: PublicUser;
+}
+
+/** Register a new school/tenant with an admin account. */
+export async function register(input: RegisterInput, meta: RequestMeta): Promise<LoginResult> {
+  // Check if email is already used across all tenants
+  const existing = await prisma.user.findFirst({
+    where: { email: input.email, deletedAt: null },
+    select: { id: true },
+  });
+  if (existing) {
+    throw new UnauthorizedError('An account with this email already exists');
+  }
+
+  const passwordHash = await hashPassword(input.password);
+
+  const result = await prisma.$transaction(async (tx) => {
+    // 1. Create the tenant (school)
+    const tenant = await tx.tenant.create({
+      data: {
+        name: input.schoolName,
+        email: input.email,
+        adminEmail: input.email,
+        academicYearStart: new Date(`${new Date().getUTCFullYear()}-01-01T00:00:00.000Z`),
+        timezone: 'UTC',
+      },
+    });
+
+    // 2. Create the admin user
+    const user = await tx.user.create({
+      data: {
+        email: input.email,
+        passwordHash,
+        role: 'ADMIN',
+        tenantId: tenant.id,
+        isVerified: false,
+      },
+    });
+
+    // 3. Create a staff record for the admin
+    await tx.staff.create({
+      data: {
+        tenantId: tenant.id,
+        userId: user.id,
+        employeeNumber: `ADM-${Date.now()}`,
+        firstName: input.firstName,
+        lastName: input.lastName,
+        role: 'ADMIN',
+        joinDate: new Date(),
+      },
+    });
+
+    // 4. Write audit log
+    await writeAudit({
+      tenantId: tenant.id,
+      actorId: user.id,
+      action: AuditAction.CREATE,
+      tableName: 'tenants',
+      recordId: tenant.id,
+      after: { name: tenant.name, adminEmail: input.email },
+      ipAddress: meta.ipAddress,
+      userAgent: meta.userAgent,
+    }, tx);
+
+    return { tenant, user };
+  });
+
+  // 5. Issue tokens so user is immediately logged in
+  const tokens = await issueTokens(
+    { sub: result.user.id, role: result.user.role, tenantId: result.user.tenantId, email: result.user.email },
+    meta,
+  );
+
+  // 6. Send verification email
+  const { rawToken } = await createAuthToken(result.user.id, TokenType.EMAIL_VERIFICATION);
+  const link = `${env.APP_PUBLIC_URL}/verify-email?token=${rawToken}`;
+  await getEmail().send({
+    to: result.user.email,
+    subject: 'Verify your Fenix account',
+    html: `<p>Welcome to Fenix! Your school <strong>${result.tenant.name}</strong> has been created.</p><p><a href="${link}">Verify your email</a> to activate your account.</p>`,
+    text: `Welcome to Fenix! Verify your email: ${link}`,
+  });
+
+  // 7. Update last login
+  await prisma.user.update({
+    where: { id: result.user.id },
+    data: { lastLoginAt: new Date() },
+  });
+
+  return { ...tokens, user: toPublicUser(result.user) };
 }
 
 /** Authenticate a user and issue tokens. Uses a constant-ish path to limit user enumeration. */

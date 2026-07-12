@@ -8,6 +8,7 @@ import {
   changePasswordSchema,
   forgotPasswordSchema,
   loginSchema,
+  registerSchema,
   resetPasswordSchema,
   verifyEmailSchema,
 } from './auth.schemas';
@@ -15,6 +16,7 @@ import {
 const router = Router();
 
 // Public auth endpoints (rate-limited).
+router.post('/register', authRateLimiter, validate(registerSchema), asyncHandler(controller.register));
 router.post('/login', authRateLimiter, validate(loginSchema), asyncHandler(controller.login));
 router.post('/refresh', asyncHandler(controller.refresh));
 router.post('/logout', asyncHandler(controller.logout));

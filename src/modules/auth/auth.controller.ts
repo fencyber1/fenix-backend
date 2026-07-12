@@ -9,6 +9,7 @@ import type {
   ChangePasswordInput,
   ForgotPasswordInput,
   LoginInput,
+  RegisterInput,
   ResetPasswordInput,
   VerifyEmailInput,
 } from './auth.schemas';
@@ -31,6 +32,13 @@ function clearRefreshCookie(res: Response): void {
 
 function meta(req: Request): { ipAddress: string | null; userAgent: string | null } {
   return { ipAddress: clientIp(req), userAgent: userAgent(req) };
+}
+
+export async function register(req: Request, res: Response): Promise<Response> {
+  const body = req.body as RegisterInput;
+  const result = await authService.register(body, meta(req));
+  setRefreshCookie(res, result.refreshToken, result.refreshExpiresAt);
+  return ok(res, { accessToken: result.accessToken, user: result.user }, 'Account created');
 }
 
 export async function login(req: Request, res: Response): Promise<Response> {

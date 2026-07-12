@@ -13,6 +13,14 @@ export const passwordSchema = z
   .regex(/[0-9]/, 'Password must contain a digit')
   .regex(/[^A-Za-z0-9]/, 'Password must contain a symbol');
 
+export const registerSchema = z.object({
+  schoolName: z.string().trim().min(2, 'School name is required').max(160),
+  email: z.string().trim().toLowerCase().email('A valid email is required'),
+  password: passwordSchema,
+  firstName: z.string().trim().min(1, 'First name is required').max(100),
+  lastName: z.string().trim().min(1, 'Last name is required').max(100),
+});
+
 export const loginSchema = z.object({
   email: z.string().trim().toLowerCase().email('A valid email is required'),
   password: z.string().min(1, 'Password is required'),
@@ -36,6 +44,7 @@ export const changePasswordSchema = z.object({
   newPassword: passwordSchema,
 });
 
+export type RegisterInput = z.infer<typeof registerSchema>;
 export type LoginInput = z.infer<typeof loginSchema>;
 export type ForgotPasswordInput = z.infer<typeof forgotPasswordSchema>;
 export type ResetPasswordInput = z.infer<typeof resetPasswordSchema>;

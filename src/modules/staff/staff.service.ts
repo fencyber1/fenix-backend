@@ -18,6 +18,14 @@ function requireTenant(auth: AuthContext): string {
   return auth.tenantId;
 }
 
+async function generateEmployeeNumber(tenantId: string): Promise<string> {
+  const prefix = 'EMP';
+  const count = await prisma.staff.count({ where: { tenantId } });
+  const next = count + 1;
+  const num = String(next).padStart(5, '0');
+  return `${prefix}-${num}`;
+}
+
 export async function createStaff(auth: AuthContext, input: CreateStaffInput, ctx: AuditContext): Promise<unknown> {
   const tenantId = requireTenant(auth);
 
@@ -26,6 +34,7 @@ export async function createStaff(auth: AuthContext, input: CreateStaffInput, ct
 
   const tempPassword = generateTempPassword();
   const passwordHash = await hashPassword(tempPassword);
+  const employeeNumber = await generateEmployeeNumber(tenantId);
 
   const result = await prisma.$transaction(async (tx) => {
     const user = await tx.user.create({
@@ -41,7 +50,7 @@ export async function createStaff(auth: AuthContext, input: CreateStaffInput, ct
       data: {
         userId: user.id,
         tenantId,
-        employeeNumber: input.employeeNumber,
+        employeeNumber,
         firstName: input.firstName,
         lastName: input.lastName,
         role: input.role,
